@@ -76,6 +76,7 @@ from .conv import (
     LightConv,
     RepConv,
     SpatialAttention,
+    TripletAttention,
 )
 from .head import (
     OBB,
@@ -185,6 +186,7 @@ __all__ = (
     "SemanticSegment",
     "SpatialAttention",
     "TorchVision",
+    "TripletAttention",
     "TransformerBlock",
     "TransformerEncoderLayer",
     "TransformerLayer",
