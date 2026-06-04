@@ -2,8 +2,11 @@
 
 Run with: python train_baseline_full.py
 """
+
 from pathlib import Path
+
 import yaml
+
 from ultralytics import YOLO
 
 ROOT = Path(".").resolve()
