@@ -223,7 +223,90 @@ python train_variant.py -c yolo11-t.yaml --iou ciou -n +T 2>&1 | tee runs/+T_tra
 
 ## 6. 训练结果
 
-（待训练完成后填入：实际 batch、训练时间、最终 P/R/mAP50/mAP50-95、FPS、与 baseline 对比、增益分析）
+### 6.1 配置（args.yaml）
+
+| 项 | 值 | 说明 |
+|---|---|---|
+| epochs | 300 | patience=50 早停 |
+| batch | 0.85 (AutoBatch) | 实际 **batch=61**（vs baseline=64, +W=62）|
+| imgsz | 640 | |
+| optimizer | SGD | lr0=0.01, momentum=0.937 |
+| amp | True | |
+| nbs | 64 | accumulate=round(64/61)=1，未触发梯度累积 |
+| weight_decay 缩放 | × (61/64) ≈ 0.953 | 比 baseline 略弱的正则化 |
+
+### 6.2 训练过程
+
+- **总 epochs**：273（早停于 epoch 273，最佳 epoch 223）
+- **训练时间**：1.369 h on RTX 4090
+- **GPU 显存**：~13G / 24G（85% AutoBatch 探测目标）
+
+### 6.3 best.pt val 最终指标
+
+| 指标 | +T | baseline (CIoU) | Δ |
+|---|---|---|---|
+| Precision | **85.6%** | 85.7%* | -0.1 |
+| Recall | **80.5%** | 80.3%* | +0.2 |
+| **mAP@0.5** | **85.9%** | 85.7%* | **+0.2** |
+| **mAP@0.5:0.95** | **60.2%** | 60.1%* | **+0.1** |
+| FPS | 244 | ~250 | -6 (略降，符合预期) |
+| GFLOPs | 6.4 | 6.4 | 0 |
+| Params | 2.58 M | 2.58 M | +0.01 M |
+
+> \* baseline 数据来自 baseline-v2 训练（autodl 历史）
+
+### 6.4 各类别 mAP@0.5（best.pt val）
+
+| 类别 | mAP50 | mAP50-95 |
+|---|---|---|
+| Car | 95.7% | 78.9% |
+| Bus | 93.8% | 77.0% |
+| Trafficcone | 92.3% | 49.6% |
+| Cyclist | 87.5% | 59.4% |
+| Van | 81.3% | 68.1% |
+| Truck | 81.3% | 55.2% |
+| Pedestrian | 78.7% | 43.0% |
+| Motorcyclist | 76.2% | 50.1% |
+
+### 6.5 分析
+
+**结论**：Triplet Attention 在 dair_v2x_i 数据集上对 YOLOv11n 提升**极其有限**（mAP50 +0.2%，mAP50-95 +0.1%），统计上不显著。
+
+**为什么提升小**：
+
+1. **Triplet 设计哲学**：Triplet Attention 是「极轻量」注意力（仅 +10K 参数，<0.5%），在大模型（ResNet-50）上有显著提升，但 YOLOv11n 已经很轻量化，注意力的边际收益小
+2. **插入位置**：仅在 backbone P5 末端插入 1 处。论文里通常每个 stage 都插入（多次注意力堆叠），单点插入是最保守版本
+3. **数据集特点**：dair_v2x_i 是路侧相机视角（俯瞰角度），Cyclist/Pedestrian 等小目标多。Triplet 更擅长跨通道-空间交互，对多尺度目标的相对收益低于专门的特征金字塔改造
+
+**速度代价**：
+- 推理时间：4.1ms → 5ms 增加约 1ms（postprocess 不变，inference 因为多了 attention 计算和 3 次 permute 略慢）
+- FPS 从 baseline ~250 降到 244，下降 ~2.4%
+- 论文里可写为「计算开销可忽略」（< 5% FPS）
+
+**与 +W 的对比**（同等条件下两个单模块改动）：
+
+| 变体 | mAP50 增益 | mAP50-95 增益 | 参数量代价 | 推理速度代价 |
+|---|---|---|---|---|
+| +W (WIoU) | +0.3% | +0.1% | 0 (loss 改动) | 0 |
+| +T (Triplet) | +0.2% | +0.1% | +10K | -2.4% FPS |
+
+两个单模块改动都在「随机性区间内」，需看后续 +TW、+TD、TDW 组合是否有协同效应。
+
+### 6.6 复现命令
+
+```bash
+git clone -b feat/triplet git@github.com:Asus-Github/yolo11.git
+cd yolo11
+ssh autodl
+tmux new -s t_train
+tmux set-option -t t_train remain-on-exit on
+source /root/miniconda3/etc/profile.d/conda.sh && conda activate base
+cd /root/autodl-tmp/ultralytics
+git checkout feat/triplet
+python train_variant.py -c yolo11-t.yaml --iou ciou -n +T 2>&1 | tee runs/+T_train.log
+```
+
+**环境注释**：本次实际训练在 `feat/wiou` HEAD 上启动（autodl 当时未切分支），但 `--iou ciou` 使 BboxLoss 走 CIoU 分支，与 `feat/triplet` 分支执行路径**完全等价**（CIoU 代码与 baseline 完全相同，WIoU 代码处于 dormant 状态未触发）。最终结果可重现。
 
 ---
 
