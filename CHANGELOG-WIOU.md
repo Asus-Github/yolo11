@@ -19,12 +19,12 @@
 
 ## 改动文件清单
 
-| # | 文件 | 操作 | commit |
-|---|------|------|--------|
-| 1 | `.gitignore` | 追加 `*.xlsx` | (init commit) |
-| 2 | `ultralytics/utils/metrics.py` | `bbox_iou` 加 `WIoU` 分支 | feat: add WIoU branch in bbox_iou |
-| 3 | `ultralytics/utils/loss.py` | `BboxLoss` 重写：支持 WIoU + register_buffer iou_mean | feat: BboxLoss supports WIoU v3 |
-| 4 | `train_w.py` | 新建：+W 实验入口（yolo11.yaml + WIoU） | feat: add +W ablation training script |
+| #   | 文件                           | 操作                                                  | commit                                |
+| --- | ------------------------------ | ----------------------------------------------------- | ------------------------------------- |
+| 1   | `.gitignore`                   | 追加 `*.xlsx`                                         | (init commit)                         |
+| 2   | `ultralytics/utils/metrics.py` | `bbox_iou` 加 `WIoU` 分支                             | feat: add WIoU branch in bbox_iou     |
+| 3   | `ultralytics/utils/loss.py`    | `BboxLoss` 重写：支持 WIoU + register_buffer iou_mean | feat: BboxLoss supports WIoU v3       |
+| 4   | `train_w.py`                   | 新建：+W 实验入口（yolo11.yaml + WIoU）               | feat: add +W ablation training script |
 
 ## 回滚方式
 
