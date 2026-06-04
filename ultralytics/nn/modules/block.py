@@ -2071,3 +2071,64 @@ class RealNVP(nn.Module):
             self.float()
         z, log_det = self.backward_p(x)
         return self.prior.log_prob(z) + log_det
+
+
+class DyHeadBlock(nn.Module):
+    """Single Dynamic Head block (Dai et al., CVPR 2021), simplified for YOLO necks.
+
+    Cascades three awareness modules per FPN level:
+      1. Spatial-aware: 3x3 Conv + GroupNorm  (DCNv2 replaced by regular Conv to keep deps minimal).
+      2. Scale-aware:   AdaptiveAvgPool -> 1x1 -> ReLU -> Hardsigmoid (channel-wise level gate).
+      3. Task-aware:    Dynamic ReLU-B with 4 learned params (a1, b1, a2, b2) predicted from a global pool.
+
+    A separate block is instantiated per FPN level (channels differ across P3/P4/P5 in YOLO11),
+    so weights are not shared across levels. Identity-friendly initialization (a1=1 bias, others 0)
+    keeps early training stable.
+
+    Args:
+        c1 (int): Number of input channels for this level.
+    """
+
+    def __init__(self, c1: int):
+        super().__init__()
+        self.c1 = c1
+        # 1) spatial-aware
+        self.spatial_conv = nn.Conv2d(c1, c1, kernel_size=3, stride=1, padding=1)
+        gn_groups = max(1, min(16, c1))
+        # ensure groups divides channels
+        while c1 % gn_groups != 0:
+            gn_groups -= 1
+        self.gn = nn.GroupNorm(num_groups=gn_groups, num_channels=c1)
+        # 2) scale-aware
+        self.scale_attn = nn.Sequential(
+            nn.AdaptiveAvgPool2d(1),
+            nn.Conv2d(c1, 1, kernel_size=1),
+            nn.ReLU(inplace=True),
+            nn.Hardsigmoid(inplace=True),
+        )
+        # 3) task-aware (DyReLU-B): predict (a1, b1, a2, b2) per channel
+        hidden = max(c1 // 4, 8)
+        self.task_attn = nn.Sequential(
+            nn.AdaptiveAvgPool2d(1),
+            nn.Conv2d(c1, hidden, kernel_size=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(hidden, c1 * 4, kernel_size=1),
+        )
+        # init last task conv so output is (a1=1, b1=0, a2=0, b2=0) -> identity
+        nn.init.zeros_(self.task_attn[-1].weight)
+        with torch.no_grad():
+            bias = self.task_attn[-1].bias
+            bias.zero_()
+            bias[:c1] = 1.0  # a1 = 1
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply spatial -> scale -> task awareness to one FPN level."""
+        # spatial
+        mid = self.gn(self.spatial_conv(x))
+        # scale
+        mid = mid * self.scale_attn(mid)
+        # task: y = max(a1*x + b1, a2*x + b2)
+        c = self.c1
+        theta = self.task_attn(mid)  # [B, 4C, 1, 1]
+        a1, b1, a2, b2 = theta[:, 0:c], theta[:, c : 2 * c], theta[:, 2 * c : 3 * c], theta[:, 3 * c : 4 * c]
+        return torch.maximum(a1 * mid + b1, a2 * mid + b2)
