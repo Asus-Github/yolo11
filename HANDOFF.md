@@ -212,27 +212,22 @@ ssh autodl "tmux capture-pane -t w_train -p | tail -30"
 
 ## 6. 进度更新（2026-06-04 13:35）
 
-### +W 训练已完成
+### +W 训练已完成（本分支专属）
 - 早停 epoch 234 / 300（patience=50）
 - best.pt val: P=86.4 / R=80.3 / mAP50=86.0 / mAP50-95=60.2 / FPS=200
 - 已 push 到 GitHub feat/wiou，本地 pull + scp 权重完成
 - xlsx row 5 已写入指标
 - **重要教训**：tmux 默认 `new -d 'cmd'` 在 cmd 结束后销毁 session。下次必须用 `tmux set-option remain-on-exit on` 或 `cmd; bash`
 
-### +T 集成已完成（commit 51b228aa）
-- 文件改动：conv.py（追加 ZPool/AttentionGate/TripletAttention 三类）、__init__.py、tasks.py（import+parse_model 分支）、yolo11-t.yaml（新建）
-- Triplet 插在 backbone P5 末端 SPPF 前；**YAML 层索引整体 +1**
-- autodl smoke test 通过：25 层 / 2.59M params / forward OK
-- 训练已在 tmux session `t_train` 启动（remain-on-exit on），AutoBatch=61
+### 分支结构（2026-06-04 已建立）
+- `feat/wiou`（本分支）— WIoU 代码 + +W 训练结果
+- `feat/triplet` — Triplet 代码 + +T 训练结果（独立分支，本分支不含 Triplet 代码）
+- 后续 `feat/dyhead`、`feat/triplet-wiou`、`feat/triplet-dyhead`、`feat/dyhead-wiou`、`feat/tdw`
 
-### 当前 tmux session
-- `t_train`（autodl）— +T 训练进行中。`ssh autodl` → `tmux attach -t t_train` 实时查看
-
-### 下一步（等 +T 训练结束）
-1. 同 +W 流程：autodl push runs，本地 pull，scp 权重
-2. xlsx row 4（序号 2，组别 +T）写入指标
-3. CHANGELOG-WIOU.md §9.5 填入 +T 结果
-4. 开始 +D（DyHead）集成：见手册「二、DyHead 集成」，改 block.py / head.py / __init__.py / tasks.py + 新建 yolo11-d.yaml
+### +T 训练状态（在 autodl 上跑，但归属 feat/triplet 分支）
+- autodl 当前仍 checkout 在 feat/wiou（运行进程不依赖 git 状态，不切换以免污染本地缓存）
+- 训练完成后：scp +T 的 runs 到本地，**在本地切到 feat/triplet 后 commit**
+- 不要让 +T 的 runs 进入本分支
 
 ### 关于 batch 一致性的统一约定
 - 所有变体用 `batch=0.85`（AutoBatch），实际 batch 各异（baseline=64, +W=62, +T=61, ...）
