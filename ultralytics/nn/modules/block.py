@@ -2103,15 +2103,15 @@ class DyHeadBlock(nn.Module):
         self.scale_attn = nn.Sequential(
             nn.AdaptiveAvgPool2d(1),
             nn.Conv2d(c1, 1, kernel_size=1),
-            nn.ReLU(inplace=True),
-            nn.Hardsigmoid(inplace=True),
+            nn.ReLU(),
+            nn.Hardsigmoid(),
         )
         # 3) task-aware (DyReLU-B): predict (a1, b1, a2, b2) per channel
         hidden = max(c1 // 4, 8)
         self.task_attn = nn.Sequential(
             nn.AdaptiveAvgPool2d(1),
             nn.Conv2d(c1, hidden, kernel_size=1),
-            nn.ReLU(inplace=True),
+            nn.ReLU(),
             nn.Conv2d(hidden, c1 * 4, kernel_size=1),
         )
         # init last task conv so output is (a1=1, b1=0, a2=0, b2=0) -> identity
