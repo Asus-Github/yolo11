@@ -108,12 +108,35 @@ class DFLoss(nn.Module):
 
 
 class BboxLoss(nn.Module):
-    """Criterion class for computing training losses for bounding boxes."""
+    """Criterion class for computing training losses for bounding boxes.
+
+    Supports CIoU (default) and Wise-IoU v3. Switch by setting the class attribute
+    ``BboxLoss.iou_type`` to ``"wiou"`` *before* the trainer instantiates v8DetectionLoss::
+
+        from ultralytics.utils.loss import BboxLoss
+        BboxLoss.iou_type = "wiou"  # for +W / +TW / +DW / TDW ablations
+        # BboxLoss.iou_type = "ciou"  # default, used by baseline / +T / +D / +TD
+
+    The running mean of (1 - iou) is stored as a buffer ``iou_mean``; because
+    ``v8DetectionLoss.__init__`` does ``self.bbox_loss = BboxLoss(...).to(device)``,
+    this buffer follows the model device and is saved into checkpoints automatically.
+    """
+
+    # ---- WIoU configuration (class attributes; safe for single-GPU training) ----
+    iou_type: str = "ciou"  # "ciou" or "wiou"
+    # Wise-IoU v3 hyper-parameters from Table 6 of the original paper.
+    wiou_alpha: float = 1.9
+    wiou_delta: float = 3.0
 
     def __init__(self, reg_max: int = 16):
         """Initialize the BboxLoss module with regularization maximum and DFL settings."""
         super().__init__()
         self.dfl_loss = DFLoss(reg_max) if reg_max > 1 else None
+        # Use a buffer (not a class attribute) for iou_mean so that:
+        #   - it auto-moves with .to(device) in v8DetectionLoss.__init__
+        #   - it is auto-saved to / restored from checkpoints
+        #   - multiple BboxLoss instances do not pollute each other
+        self.register_buffer("iou_mean", torch.tensor(1.0))
 
     def forward(
         self,
@@ -129,8 +152,27 @@ class BboxLoss(nn.Module):
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Compute IoU and DFL losses for bounding boxes."""
         weight = target_scores.sum(-1)[fg_mask].unsqueeze(-1)
-        iou = bbox_iou(pred_bboxes[fg_mask], target_bboxes[fg_mask], xywh=False, CIoU=True)
-        loss_iou = ((1.0 - iou) * weight).sum() / target_scores_sum
+
+        if self.iou_type == "wiou":
+            iou, r_wiou = bbox_iou(
+                pred_bboxes[fg_mask], target_bboxes[fg_mask], xywh=False, WIoU=True
+            )
+            loss_iou_per = 1.0 - iou  # [N, 1]
+
+            # Update the running mean of loss_iou in fp32 (AMP-safe), no_grad.
+            with torch.no_grad():
+                cur_mean = loss_iou_per.detach().float().mean().clamp_(min=1e-7)
+                self.iou_mean.mul_(0.9).add_(cur_mean * 0.1)
+
+            # Dynamic non-monotonic focusing factor:
+            #   beta = (1 - iou) / iou_mean
+            #   r    = beta / (delta * alpha ** (beta - delta))
+            beta = (loss_iou_per.detach() / self.iou_mean.clamp_(min=1e-7)).clamp_(min=1e-7)
+            r_focus = beta / (self.wiou_delta * (self.wiou_alpha ** (beta - self.wiou_delta)))
+            loss_iou = ((r_focus * r_wiou * loss_iou_per) * weight).sum() / target_scores_sum
+        else:  # CIoU baseline (default)
+            iou = bbox_iou(pred_bboxes[fg_mask], target_bboxes[fg_mask], xywh=False, CIoU=True)
+            loss_iou = ((1.0 - iou) * weight).sum() / target_scores_sum
 
         # DFL loss
         if self.dfl_loss:
