@@ -109,6 +109,7 @@ def bbox_iou(
     GIoU: bool = False,
     DIoU: bool = False,
     CIoU: bool = False,
+    WIoU: bool = False,
     eps: float = 1e-7,
 ) -> torch.Tensor:
     """Calculate the Intersection over Union (IoU) between bounding boxes.
@@ -125,10 +126,11 @@ def bbox_iou(
         GIoU (bool, optional): If True, calculate Generalized IoU.
         DIoU (bool, optional): If True, calculate Distance IoU.
         CIoU (bool, optional): If True, calculate Complete IoU.
+        WIoU (bool, optional): If True, return ``(iou, r_wiou)`` for Wise-IoU v3 focusing in caller (BboxLoss).
         eps (float, optional): A small value to avoid division by zero.
 
     Returns:
-        (torch.Tensor): IoU, GIoU, DIoU, or CIoU values depending on the specified flags.
+        (torch.Tensor): IoU/GIoU/DIoU/CIoU value, OR a tuple ``(iou, r_wiou)`` when ``WIoU=True``.
     """
     # Get the coordinates of bounding boxes
     if xywh:  # transform from xywh to xyxy
@@ -168,6 +170,20 @@ def bbox_iou(
             return iou - rho2 / c2  # DIoU
         c_area = cw * ch + eps  # convex area
         return iou - (c_area - union) / c_area  # GIoU https://arxiv.org/pdf/1902.09630.pdf
+    if WIoU:
+        # Wise-IoU v3 (Tong et al., 2023): distance attention term R_WIoU.
+        # The dynamic non-monotonic focusing factor is computed in the caller (BboxLoss),
+        # because it depends on the running mean of (1 - iou) across the batch.
+        cw = b1_x2.maximum(b2_x2) - b1_x1.minimum(b2_x1)  # convex width
+        ch = b1_y2.maximum(b2_y2) - b1_y1.minimum(b2_y1)  # convex height
+        c2 = cw.pow(2) + ch.pow(2) + eps  # convex diagonal squared
+        rho2 = (
+            (b2_x1 + b2_x2 - b1_x1 - b1_x2).pow(2) + (b2_y1 + b2_y2 - b1_y1 - b1_y2).pow(2)
+        ) / 4  # center distance squared
+        # Detach c2 so the gradient flows only through rho2 (paper section 3.2).
+        # Clamp the exponent at 10 to keep r_wiou <= exp(10) ~= 22026, AMP/fp16 safe (fp16 max=65504).
+        r_wiou = torch.exp((rho2 / c2.detach()).clamp_(max=10.0))
+        return iou, r_wiou
     return iou  # IoU
 
 
