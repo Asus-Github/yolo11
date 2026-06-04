@@ -215,3 +215,10 @@ docs/about/*.docx
 
 # CI test asset cache
 .ultralytics_cache/
+
+# Force-include experiment artifacts under runs/ (override generic image/log
+# ignores above) so we can version results.csv / args.yaml / plots / logs.
+# Weights are heavy → still excluded by the explicit pt rule below.
+!runs/**
+runs/**/*.pt
+runs/**/weights/
