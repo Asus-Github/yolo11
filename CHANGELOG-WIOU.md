@@ -42,7 +42,102 @@ python train_variant.py -c yolo11n.yaml --iou ciou -n baseline
 
 ---
 
-## 1. WIoU v3 论文公式速查（先看公式再看代码）
+## 1. WIoU 改在哪：数据流图（不是架构图！）
+
+**重要事实**：WIoU 是**损失函数**改动，**模型架构 0 改动**。yolo11n 的 backbone / neck / detect head 全部不变，因此严格意义上没有"修改后的架构图"——损失函数不在架构里。下面这张**训练数据流图**才是教学上有用的"改在哪"：
+
+```
+   ┌─────────────────────────────────────────────────────────┐
+   │             [模型架构层] —— 完全 0 改动 ——              │
+   │                                                         │
+   │     Image (640×640×3)                                   │
+   │           │                                             │
+   │           ▼                                             │
+   │     ┌──────────┐                                        │
+   │     │ Backbone │  Conv → C3k2 → ... → SPPF → C2PSA      │
+   │     └──────────┘                                        │
+   │           │                                             │
+   │           ▼                                             │
+   │     ┌──────────┐                                        │
+   │     │   Neck   │  PAN-FPN (上下采样 + Concat + C3k2)    │
+   │     └──────────┘                                        │
+   │           │                                             │
+   │           ▼  P3/8, P4/16, P5/32 三尺度特征              │
+   │     ┌──────────┐                                        │
+   │     │  Detect  │  cls_logits + reg_dist                 │
+   │     │   Head   │                                        │
+   │     └──────────┘                                        │
+   │           │                                             │
+   │           ▼                                             │
+   │   pred_dist (DFL分布), pred_bboxes (decoded xyxy)       │
+   └───────────┬─────────────────────────────────────────────┘
+               │
+               ▼  传给损失模块
+   ┌─────────────────────────────────────────────────────────┐
+   │           [损失层] —— 改动只发生在这里 ——               │
+   │                                                         │
+   │     v8DetectionLoss.__call__(preds, batch)              │
+   │           │                                             │
+   │     ┌─────┼─────────────────────────┐                   │
+   │     ▼     ▼                         ▼                   │
+   │   cls_loss  ┌────────────────────────────┐  dfl_loss    │
+   │   (BCE)    │      BboxLoss.forward       │  (在 BboxLoss│
+   │   不变     │    (reg_max=16, 子模块)     │   内部，不变) │
+   │            │                            │               │
+   │            │   ┌─ self.iou_type ─┐      │               │
+   │            │   ▼                 ▼      │               │
+   │            │ "ciou"            "wiou"   │ ← 新增分支    │
+   │            │  (默认)         (本次新增) │               │
+   │            │   │                 │      │               │
+   │            │   ▼                 ▼      │               │
+   │            │ bbox_iou(CIoU)  bbox_iou(WIoU=True)        │
+   │            │   │                 │   ↳ 返回 (iou, r_wiou)
+   │            │   │                 │      │               │
+   │            │   │                 ▼      │               │
+   │            │   │       ┌────────────────┐               │
+   │            │   │       │  EMA 更新      │               │
+   │            │   │       │  iou_mean      │               │
+   │            │   │       │ (register_buffer,│              │
+   │            │   │       │ 不参与梯度)    │               │
+   │            │   │       └───────┬────────┘               │
+   │            │   │               │                        │
+   │            │   │               ▼                        │
+   │            │   │     β = (1-iou).detach() / iou_mean    │
+   │            │   │               │                        │
+   │            │   │               ▼                        │
+   │            │   │     r_focus = β / (δ·α^(β−δ))          │
+   │            │   │               │  (动态非单调聚焦因子)  │
+   │            │   ▼               ▼                        │
+   │            │ (1-iou)·weight   r_focus · r_wiou          │
+   │            │       │           · (1-iou) · weight       │
+   │            │       └───────┬───┘                        │
+   │            │               ▼                            │
+   │            │           loss_iou (标量)                  │
+   │            └────────────────────────────┘               │
+   │                          │                              │
+   │                          ▼                              │
+   │           total_loss = box·loss_iou + cls·cls_loss      │
+   │                       + dfl·loss_dfl                    │
+   └─────────────────────────────────────────────────────────┘
+                              │
+                              ▼  反向传播
+                          梯度回到模型参数
+```
+
+**总结：3 处代码改动一一对应这张图**：
+
+| 图中位置 | 代码改动 | 文件 |
+|---|---|---|
+| `bbox_iou(WIoU=True)` 分支 | 新增 R_WIoU 计算并返回 `(iou, r_wiou)` | `metrics.py` |
+| `iou_mean` buffer + EMA | `register_buffer("iou_mean")` + `.mul_(0.9).add_(...)` | `loss.py::BboxLoss` |
+| `r_focus = β / (δ·α^(β−δ))` 与最终 `r·r_wiou·(1-iou)` | `BboxLoss.forward` 的 `if self.iou_type == "wiou"` 分支 | `loss.py::BboxLoss` |
+| `iou_type="wiou"` 切换入口 | `BboxLoss.iou_type = args.iou` | `train_variant.py` |
+
+**架构层完全没动**——你打开 `yolo11n.yaml`，里面所有 backbone/head 配置一字未改。要确认这一点：`git diff main..feat/wiou -- ultralytics/cfg/` 输出为空。
+
+---
+
+## 2. WIoU v3 论文公式速查（先看公式再看代码）
 
 WIoU v3 包含**两步**：
 
@@ -76,7 +171,7 @@ $$
 
 ---
 
-## 2. 改动清单与逐项解析
+## 3. 改动清单与逐项解析
 
 ### 改动 1 — `.gitignore`（commit `4e8bbf7e` & 后续 runs/ 放开）
 
@@ -220,7 +315,9 @@ model.train(**train_kwargs)
 
 ---
 
-## 3. 烟雾测试脚本（autodl 上跑）
+## 4. 烟雾测试脚本（autodl 上跑）
+
+> 已固化在 `/tmp/wiou_smoke.py`（autodl）。源码也在下面，方便本地复制。
 
 ```python
 # 在 autodl 上：
@@ -259,7 +356,7 @@ print("ALL PASSED")
 
 ---
 
-## 4. 实验执行清单（按表格顺序）
+## 5. 实验执行清单（按表格顺序）
 
 | 顺序 | 组别 | yaml | --iou | 命令 |
 |------|------|------|-------|------|
@@ -274,6 +371,34 @@ print("ALL PASSED")
 
 ---
 
-## 5. 烟雾测试结果
+## 6. 烟雾测试结果（autodl, RTX 4090, 2026-06-04）
 
-(待补充，autodl 端 tmux 跑完后填)
+5/5 通过。tmux 会话名 `wiou_smoke`，日志在 `/tmp/wiou_smoke.log`。
+
+```
+============================================================
+WIoU smoke test (autodl, RTX 4090)
+============================================================
+[1] iou=0.8397  r_wiou=1.0007
+    └─ 两框中心几乎重合，距离惩罚≈1（近 1 表示几乎不惩罚）
+[2] far-pair r_wiou=2.70 (clamp ceiling exp(10)~22026)
+    └─ 两 4×4 框相距 1414，rho²/c²≈0.992，exp 后 ≈2.70（合理；clamp 在更极端
+       场景才生效，本测试只是确认 isfinite）
+[3] device=cuda
+[3] wiou loss_iou=0.8400 loss_dfl=3.2994 iou_mean=0.9756
+[3] backward ok, grad isfinite=True
+    └─ GPU 上完整 forward+backward，所有梯度有限
+[4] ciou loss_iou=0.7434
+    └─ 默认 CIoU 路径仍工作，未受 WIoU 改动影响
+[5] state_dict keys: ['iou_mean']
+    └─ 确认 iou_mean 是 buffer（会随 .to(device) + 进 ckpt）
+============================================================
+ALL 5 SMOKE TESTS PASSED
+============================================================
+```
+
+**结论**：WIoU 集成在 GPU 上 forward + backward 路径均无 NaN/inf，可以放心进入 +W 实验全量训练。
+
+---
+
+## 7. 烟雾测试脚本
