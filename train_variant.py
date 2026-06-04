@@ -37,6 +37,7 @@ from pathlib import Path
 
 import yaml
 from ultralytics import YOLO
+from ultralytics.utils.loss import BboxLoss
 
 
 def patch_dataset_yaml(repo_root: Path) -> Path:
@@ -103,13 +104,10 @@ def main():
         plots=not args.probe,
     )
 
-    # WIoU 切换：通过环境变量 / 配置告知 BboxLoss
-    # 注：实际 WIoU 实现需要修改 ultralytics/utils/loss.py（后续做 TDW 集成时一并改）
-    # 这里先用 box gain 作为占位，提醒未实现
-    if args.iou == "wiou":
-        # TODO: 完成 WIoU loss 集成后启用
-        # from ultralytics.utils.loss import set_iou_type; set_iou_type("wiou")
-        print("[warn] WIoU 当前未实现，请先完成 loss 集成。fallback 到 ciou。")
+    # WIoU 切换：通过类属性告知 BboxLoss（在 v8DetectionLoss 实例化前设好即可）。
+    # 实际实现见 ultralytics/utils/loss.py::BboxLoss。默认 'ciou'，本脚本根据 --iou 切换。
+    BboxLoss.iou_type = args.iou
+    print(f"[train_variant] BboxLoss.iou_type = {BboxLoss.iou_type}")
 
     model.train(**train_kwargs)
 
