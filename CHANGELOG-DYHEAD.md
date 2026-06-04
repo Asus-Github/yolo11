@@ -191,14 +191,34 @@ yolo detect train \
 
 ## 9. Results
 
-_Pending_ — fill in once training on autodl finishes.
+Training completed on autodl (RTX 4090), 300 epochs, AutoBatch (`batch=0.85`, actual batch=46),
+SGD, `iou=0.7`, `lr0=0.01`, dataset `dair_v2x_i`, imgsz 640. Total wall time ≈ 1.847 h.
+
+Final metrics from `best.pt` validation (`runs/detect/runs/ablation/+D`):
 
 | Metric | +D |
 |---|---|
-| Precision | TBD |
-| Recall | TBD |
-| mAP@0.5 | TBD |
-| mAP@0.5:0.95 | TBD |
-| FPS (full pipeline) | TBD |
-| GFLOPs | TBD |
-| Params (M) | TBD |
+| Precision | 86.3 |
+| Recall | 81.1 |
+| mAP@0.5 | 86.6 |
+| mAP@0.5:0.95 | 61.3 |
+| FPS (full pipeline) | 435 |
+| GFLOPs | 9.3 |
+| Params (M) | 4.35 |
+
+Speed (per image, RTX 4090, val): preprocess 0.1 ms / inference 1.6 ms / postprocess 0.6 ms.
+FPS computed as `1000 / (pre + inference + post)` to stay consistent with `+T` / `+W` rows in
+`刘华硕-飞书导入实验记录表.xlsx`.
+
+Per-class mAP50 highlights (val): Car 0.959, Bus 0.953, Trafficcone 0.924, Cyclist 0.885,
+Van 0.824, Truck 0.814, Pedestrian 0.792, Motorcyclist 0.775.
+
+Comparison vs prior ablations (mAP50 / mAP50-95):
+
+| Variant | P | R | mAP50 | mAP50-95 | FPS | GFLOPs | Params (M) |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| +T (Triplet) | 85.6 | 80.5 | 85.9 | 60.2 | 244 | 6.4 | 2.6 |
+| +W (WIoU)    | 86.4 | 80.3 | 86.0 | 60.2 | 200 | 6.4 | 2.6 |
+| **+D (DyHead)** | **86.3** | **81.1** | **86.6** | **61.3** | **435** | 9.3 | 4.35 |
+
+DyHead 在 mAP50 / mAP50-95 / Recall 上均优于 `+T` 与 `+W`，代价是参数量约 +67%、FLOPs 约 +45%。
