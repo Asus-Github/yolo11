@@ -194,15 +194,22 @@ ssh autodl 'tmux capture-pane -t t_train_td -p | tail -80'
 
 2. 读 results.csv 末尾 + best.pt 的 val 指标（在 tmux 末尾日志里）。
 
-3. 同步轻量产物到本地（不传权重）：
+3. **同步完整训练产物到本地（含权重 .pt）**：
 
 ```bash
 mkdir -p /Users/asus/ultralytics/runs/detect/runs/ablation
-rsync -av --exclude='weights/' --exclude='*.pt' \
+# 完整目录（包含 weights/best.pt + last.pt + 所有图表/csv/yaml）
+rsync -av \
   autodl:/root/autodl-tmp/ultralytics/runs/detect/runs/ablation/+TD \
   /Users/asus/ultralytics/runs/detect/runs/ablation/
 scp autodl:/root/autodl-tmp/ultralytics/runs/+TD_train.log /Users/asus/ultralytics/runs/+TD_train.log
 ```
+
+> 同步规则（约定）：
+> - **本地 Mac 保留完整训练结果**（含 `*.pt` 权重），方便复现 / 推理 / 后续 fine-tune。
+> - **git 仓库只 push 除 `.pt` 之外的所有产物**：`results.csv` / `args.yaml` / `*.png` / `*.jpg` / `train.log` 等。
+> - `.gitignore` 已排除 `runs/**/*.pt` 与 `runs/**/weights/`，`git add 'runs/**'` 不会带上权重，可放心使用。
+> - 验证可加：`git status` 检查暂存区，或 `git check-ignore -v <pt-path>` 确认权重被忽略。
 
 4. 计算 FPS = `1000 / (pre + inf + post)`（从 tmux/log 中的 `Speed:` 行）。
 
@@ -218,12 +225,21 @@ ws["M6"], ws["N6"], ws["O6"] = FPS, GFLOPs, Params
 wb.save("/Users/asus/ultralytics/刘华硕-飞书导入实验记录表.xlsx")
 ```
 
-6. 提交：
+6. 提交（只推非权重产物）：
 
 ```bash
-git add CHANGELOG-TD.md 'runs/**'
+git add CHANGELOG-TD.md 'runs/**'      # 'runs/**' glob 不会匹配被忽略的 .pt
+git status                              # 再次确认无 .pt 进暂存区
 git commit -m "docs(+TD): record Triplet+DyHead training results"
 git push origin feat/triplet-dyhead
+```
+
+7. 已完成训练的权重补同步（如 `+D` 之前漏了，可单独补）：
+
+```bash
+mkdir -p /Users/asus/ultralytics/runs/detect/runs/ablation/+D/weights
+scp autodl:/root/autodl-tmp/ultralytics/runs/detect/runs/ablation/+D/weights/{best,last}.pt \
+    /Users/asus/ultralytics/runs/detect/runs/ablation/+D/weights/
 ```
 
 ---
