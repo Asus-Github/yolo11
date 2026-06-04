@@ -68,7 +68,6 @@ from ultralytics.nn.modules import (
     Segment26,
     SemanticSegment,
     TorchVision,
-    TripletAttention,
     WorldDetect,
     YOLOEDetect,
     YOLOESegment,
@@ -1813,10 +1812,6 @@ def parse_model(d, ch, verbose=True):
             args = [c1, c2, *args[1:]]
         elif m is CBFuse:
             c2 = ch[f[-1]]
-        elif m is TripletAttention:
-            c1 = ch[f]
-            c2 = c1
-            args = [c1]
         elif m in frozenset({TorchVision, Index}):
             c2 = args[0]
             c1 = ch[f]
