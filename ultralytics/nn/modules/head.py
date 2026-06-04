@@ -15,7 +15,7 @@ from ultralytics.utils import NOT_MACOS14
 from ultralytics.utils.tal import dist2bbox, dist2rbox, make_anchors
 from ultralytics.utils.torch_utils import TORCH_1_11, fuse_conv_and_bn, smart_inference_mode
 
-from .block import DFL, SAVPE, BNContrastiveHead, ContrastiveHead, Proto, Proto26, RealNVP, Residual, SwiGLUFFN
+from .block import DFL, SAVPE, BNContrastiveHead, ContrastiveHead, DyHeadBlock, Proto, Proto26, RealNVP, Residual, SwiGLUFFN
 from .conv import Conv, DWConv
 from .transformer import MLP, DeformableTransformerDecoder, DeformableTransformerDecoderLayer
 from .utils import bias_init_with_prob, linear_init
@@ -24,6 +24,7 @@ __all__ = (
     "OBB",
     "Classify",
     "Detect",
+    "DyHeadDetect",
     "Pose",
     "RTDETRDecoder",
     "Segment",
@@ -1866,3 +1867,39 @@ class SemanticSegment(nn.Module):
         if self.export and self.format != "coreml":  # coreml does not support interpolate
             return F.interpolate(logits, scale_factor=8, mode="bilinear", align_corners=False)
         return logits
+
+
+class DyHeadDetect(Detect):
+    """YOLO Detect head wrapped with Dynamic Head (DyHead, Dai et al., CVPR 2021).
+
+    Stacks ``num_blocks`` cascaded ``DyHeadBlock`` instances per FPN level before the standard
+    Detect ``cv2``/``cv3`` branches. ``num_blocks`` is a class attribute (default 2) so it does not
+    interfere with the ``(nc, reg_max, end2end, ch)`` __init__ signature consumed by parse_model.
+
+    Attributes:
+        num_blocks (int): Number of cascaded DyHead blocks per level.
+        dyhead (nn.ModuleList): Per-level Sequential of DyHeadBlock instances.
+    """
+
+    num_blocks: int = 2  # cascaded DyHead blocks per level
+
+    def __init__(self, nc: int = 80, reg_max: int = 16, end2end: bool = False, ch: tuple = ()):
+        """Initialize DyHeadDetect.
+
+        Args:
+            nc (int): Number of classes.
+            reg_max (int): DFL channels.
+            end2end (bool): Whether to use end-to-end NMS-free detection.
+            ch (tuple): Per-level input channel counts from the neck.
+        """
+        super().__init__(nc, reg_max, end2end, ch)
+        self.dyhead = nn.ModuleList(
+            nn.Sequential(*[DyHeadBlock(c) for _ in range(self.num_blocks)]) for c in ch
+        )
+
+    def forward(
+        self, x: list[torch.Tensor]
+    ) -> dict[str, torch.Tensor] | torch.Tensor | tuple[torch.Tensor, dict[str, torch.Tensor]]:
+        """Apply per-level DyHead refinement, then run the standard Detect head."""
+        x = [self.dyhead[i](xi) for i, xi in enumerate(x)]
+        return super().forward(x)
