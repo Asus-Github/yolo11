@@ -204,5 +204,13 @@ calibration_*.npy
 args.yaml
 results.csv
 
+# Lab/experiment binaries (Excel from Feishu)
+*.xlsx
+
+# Reference papers / docs (large binaries, keep .md notes)
+docs/about/*.pdf
+docs/about/*.doc
+docs/about/*.docx
+
 # CI test asset cache
 .ultralytics_cache/

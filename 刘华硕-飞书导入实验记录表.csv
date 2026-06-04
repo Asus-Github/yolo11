@@ -1,0 +1,14 @@
+序号,实验类型,组别名,模型/YAML,IoU损失,Triplet,DyHead,WIoU,Precision/%,Recall/%,mAP@0.5/%,mAP@0.5:0.95/%,FPS,GFLOPs,Params/M,备注
+1,消融实验,baseline,yolo11.yaml,CIoU,否,否,否,,,,,,6.4,2.6,YOLOv11n原版
+2,消融实验,+T,yolo11-t.yaml,CIoU,是,否,否,,,,,,,,仅加Triplet
+3,消融实验,+D,yolo11-d.yaml,CIoU,否,是,否,,,,,,,,仅加DyHead
+4,消融实验,+W,yolo11.yaml,WIoU,否,否,是,,,,,,6.4,2.6,仅换WIoU
+5,消融实验,+TD,yolo11-td.yaml,CIoU,是,是,否,,,,,,,,Triplet+DyHead
+6,消融实验,+TW,yolo11-t.yaml,WIoU,是,否,是,,,,,,,,Triplet+WIoU
+7,消融实验,+DW,yolo11-d.yaml,WIoU,否,是,是,,,,,,,,DyHead+WIoU
+8,消融实验,TDW,yolo11-tdw.yaml,WIoU,是,是,是,,,,,,,,完整模型
+9,对比实验,YOLOv5n,yolov5n.pt,默认,-,-,-,,,,,,,,与主流模型对比
+10,对比实验,YOLOv8n,yolov8n.pt,默认,-,-,-,,,,,,,,与主流模型对比
+11,对比实验,YOLOv10n,yolov10n.pt,默认,-,-,-,,,,,,,,与主流模型对比
+12,对比实验,YOLOv11n,yolo11.yaml,CIoU,否,否,否,,,,,,6.4,2.6,本文baseline
+13,对比实验,YOLOv11n-TDW,yolo11-tdw.yaml,WIoU,是,是,是,,,,,,,,本文方法
