@@ -1,235 +1,136 @@
-# Agent Handoff — WIoU 集成 + 训练同步
+# Agent Handoff — TDW 训练中
 
 > 给下一位 agent：本文档是当前会话的全局快照。读完即可无缝接手。
-> 用户 = 刘华硕，研究方向 YOLOv11 + Triplet Attention + DyHead + Wise-IoU (TDW) 三模块消融实验，用于硕士论文。
+> 用户 = 刘华硕，研究方向 YOLOv11 + Triplet Attention + DyHead + Wise-IoU (TDW) 三模块消融实验，硕士论文。
 
 ---
 
-## 1. 当前进行中的任务
+## 1. 当前进行中：**只有 `t_train_tdw` 一个 tmux 需要关注**
 
-**目标**：跑 +W（仅替换 IoU 损失为 Wise-IoU v3）消融实验，结果同步到本地 xlsx。
+**autodl 上 tmux 状态**：
+- `t_train_tdw` ← **唯一在跑的，需要分析这个**
+- `t_train_dw`  ← 已完成，结果已 push 到 feat/dyhead-wiou，xlsx row 8 已填，CHANGELOG-DW.md §5 已写，可忽略
+- `t_train_tw`  ← 已完成，结果已 push 到 feat/triplet-wiou（commit f7aa200b），xlsx row 7 已填，CHANGELOG-TW.md §5 已写，可忽略
 
-**实时状态**（截至 2026-06-04 11:46）：
-- autodl 上 tmux 会话 `w_train` 内训练进行中
-- 已到 epoch 5/300，首次 val: mAP50=0.309（正常前期值）
-- 用户**已说不需要后台监控**，等用户通知训练结束再动作
-- ~17s/epoch，预计 ~85min 完成全部 300 epoch
-
-**训练命令**（autodl tmux `w_train`）：
+**TDW 训练命令**（autodl tmux `t_train_tdw`）：
 ```bash
+cd /root/autodl-tmp/ultralytics
 source /root/miniconda3/etc/profile.d/conda.sh && conda activate base
-cd /root/autodl-tmp/ultralytics
-python train_variant.py -c yolo11n.yaml --iou wiou -n +W
+python train_variant.py -c ultralytics/cfg/models/11/yolo11-td.yaml --iou wiou -n TDW --epochs 300 --device 0 2>&1 | tee runs/TDW_train.log
 ```
+（注：网络结构 = `yolo11-td.yaml`，TDW = TD 网络 + WIoU 损失，不需要单独的 yolo11-tdw.yaml）
 
-**输出路径**：`/root/autodl-tmp/ultralytics/runs/detect/runs/ablation/+W/`
-- `results.csv` — 每 epoch 指标
-- `weights/best.pt`, `weights/last.pt`
-- `args.yaml`, 各种曲线 png
+**TDW 模型规模**：4.36M params，9.29 GFLOPs，AutoBatch=46。
+**输出路径**：`/root/autodl-tmp/ultralytics/runs/detect/runs/ablation/TDW/`
 
 ---
 
-## 2. 训练结束后必做事项（按顺序）
+## 2. 训练结束后必做事项（只针对 TDW）
 
-### 2.1 autodl 端整理 runs（排除大权重文件）
-当前 `.gitignore` 已配置：`!runs/**` 白名单，但 `runs/**/*.pt` 和 `runs/**/weights/` 被排除。
-所以正常 `git add runs/` 即可，weights 目录不会进 git。
-
+### 2.1 检查训练完成
 ```bash
-ssh autodl
-cd /root/autodl-tmp/ultralytics
-git add runs/
-git commit -m "exp(+W): WIoU ablation results (300 epochs, dair_v2x_i)"
-# push 用 ssh.github.com:443（普通 22 端口被墙）
-git push origin feat/wiou
+ssh autodl "tmux capture-pane -t t_train_tdw -p | tail -30"
+```
+确认 `EXITCODE=0` 和 best.pt 已生成。
+
+### 2.2 push 到 feat/tdw（autodl）
+autodl 当前在 `feat/tdw` 分支，runs/ 白名单已配置（权重排除）：
+```bash
+ssh autodl "cd /root/autodl-tmp/ultralytics && git add runs/detect/runs/ablation/TDW runs/TDW_train.log && git commit -m 'exp(TDW): full training results (300 epochs, dair_v2x_i)' && git push origin feat/tdw"
 ```
 
-### 2.2 本地拉取
+### 2.3 本地 pull + scp 权重
 ```bash
 cd /Users/asus/ultralytics
-git pull origin feat/wiou
+git pull origin feat/tdw
+mkdir -p runs/detect/runs/ablation/TDW/weights
+scp -r autodl:/root/autodl-tmp/ultralytics/runs/detect/runs/ablation/TDW/weights/ runs/detect/runs/ablation/TDW/
 ```
 
-### 2.3 用户手动处理权重（用户明确要求）
-**不要替用户决定权重归档策略**。用户原话：
-> 不要采用 B+c 了，训练完成后同步到本地我手动处理吧
-
-只需用 scp 把权重单独拉到本地（不入 git）：
-```bash
-scp -r autodl:/root/autodl-tmp/ultralytics/runs/detect/runs/ablation/+W/weights /Users/asus/ultralytics/runs/detect/runs/ablation/+W/
-```
-
-### 2.4 解析指标 + 更新 xlsx
-xlsx：`/Users/asus/ultralytics/刘华硕-飞书导入实验记录表.xlsx`（在 .gitignore 中，仅本地）
-
-**目标行**：`数据表` sheet，**row 5**（序号=4，组别=+W）
-
-**列映射**（已确认 r1 表头）：
-- I (9) Precision|%
-- J (10) Recall|%
-- K (11) mAP@0.5|%（注意冒号是中文「：」）
-- L (12) mAP@0.5:0.95|%
-- M (13) FPS
-- N (14) GFLOPs — 已预填 6.4，无需改
-- O (15) Params|M — 已预填 2.6，无需改
-
-**数据来源**：`runs/detect/runs/ablation/+W/results.csv` 最后一行
-- 列名：`metrics/precision(B)`, `metrics/recall(B)`, `metrics/mAP50(B)`, `metrics/mAP50-95(B)`
-- xlsx 用百分比，所以 `value * 100` 保留 1-3 位小数
-
-**FPS 单独跑**（results.csv 没有 FPS）：
+### 2.4 FPS 基准（batch=1）
 ```bash
 ssh autodl "cd /root/autodl-tmp/ultralytics && source /root/miniconda3/etc/profile.d/conda.sh && conda activate base && python -c \"
 from ultralytics import YOLO
-m = YOLO('runs/detect/runs/ablation/+W/weights/best.pt')
-r = m.val(data='ultralytics/cfg/datasets/dair_v2x_i.yaml', imgsz=640, batch=1, device=0)
-# r.speed: {'preprocess', 'inference', 'postprocess', 'loss'} ms
-total_ms = r.speed['preprocess'] + r.speed['inference'] + r.speed['postprocess']
-print(f'FPS={1000/total_ms:.2f}')
+m = YOLO('runs/detect/runs/ablation/TDW/weights/best.pt')
+r = m.val(data='/root/autodl-tmp/ultralytics/datasets/dair_v2x_i/_runtime.yaml', imgsz=640, batch=1, device=0, verbose=False)
+s = r.speed; total = s['preprocess'] + s['inference'] + s['postprocess']
+print(f'TDW: total={total:.2f}ms FPS={1000/total:.1f}')
 \""
 ```
 
-**写入 xlsx 模板代码**：
+### 2.5 写入 xlsx row 9（TDW）
+xlsx：`/Users/asus/ultralytics/刘华硕-飞书导入实验记录表.xlsx`，sheet `数据表`，**row 9**（序号=8，组别=TDW）。
+列映射：I=P|%, J=R|%, K=mAP50|%, L=mAP50-95|%, M=FPS, N=GFLOPs(=9.29), O=Params|M(=4.36)
+
 ```python
-import openpyxl, csv
-xlsx_path = '/Users/asus/ultralytics/刘华硕-飞书导入实验记录表.xlsx'
-csv_path = '/Users/asus/ultralytics/runs/detect/runs/ablation/+W/results.csv'
-with open(csv_path) as f:
-    rows = list(csv.DictReader(f))
-last = rows[-1]
-P  = float(last['         metrics/precision(B)'].strip()) * 100  # key 含空格，strip
-R  = float(last['            metrics/recall(B)'].strip()) * 100
-m50= float(last['             metrics/mAP50(B)'].strip()) * 100
-m95= float(last['          metrics/mAP50-95(B)'].strip()) * 100
-FPS = ...  # 上一步 benchmark 得到
-wb = openpyxl.load_workbook(xlsx_path)
+import openpyxl
+wb = openpyxl.load_workbook('/Users/asus/ultralytics/刘华硕-飞书导入实验记录表.xlsx')
 ws = wb['数据表']
-ws.cell(5, 9, round(P, 2))
-ws.cell(5, 10, round(R, 2))
-ws.cell(5, 11, round(m50, 2))
-ws.cell(5, 12, round(m95, 2))
-ws.cell(5, 13, round(FPS, 1))
-wb.save(xlsx_path)
+ws.cell(9, 9, P); ws.cell(9, 10, R); ws.cell(9, 11, m50); ws.cell(9, 12, m95)
+ws.cell(9, 13, FPS); ws.cell(9, 14, 9.29); ws.cell(9, 15, 4.36)
+wb.save('/Users/asus/ultralytics/刘华硕-飞书导入实验记录表.xlsx')
 ```
-注意：results.csv 的列名前有空格（pandas/csv reader 默认会保留），先 print 看真实 key。
 
-### 2.5 更新 CHANGELOG-WIOU.md
-在「Section 6 — Smoke Test 结果」后追加「Section 7 — +W 完整训练结果」，记录：
-- 起止时间、epoch 数、是否 early stop
-- 最终 P/R/mAP50/mAP50-95
-- 与 baseline-v2 对比（baseline-v2: epoch 266 早停, mAP50=0.857, mAP50-95=0.601）
-- 是否观察到训练曲线异常
+### 2.6 在 feat/tdw 创建 CHANGELOG-TDW.md §5（参考 CHANGELOG-DW.md 格式）
+对比表只需对比目前已有的 7 个变体 + TDW，重点回答：**TDW 是否超过 +DW（mAP50=87.0, mAP50-95=61.3）**。
 
 ---
 
-## 3. 关键背景知识（必读）
+## 3. 当前已完成进度
 
-### 3.1 项目结构
-- 仓库根：`/Users/asus/ultralytics`（Mac，开发）↔ `/root/autodl-tmp/ultralytics`（autodl RTX 4090，训练）
-- 远程 git：`git@github.com:Asus-Github/yolo11.git`（已设为 public）
-- 当前分支：`feat/wiou`
-- 数据集：`/root/autodl-tmp/ultralytics/datasets/dair_v2x_i/`（4940 train + 1411 val）
+### 3.1 已训练完成的 7 个变体（best.pt val on dair_v2x_i, 1411 imgs）
 
-### 3.2 WIoU 集成（已完成，无需再改）
-**核心文件改动**：
-1. `ultralytics/utils/metrics.py` — `bbox_iou` 加 `WIoU=True` 分支，返回 `(iou, r_wiou)`
-2. `ultralytics/utils/loss.py` — `BboxLoss` 加 `iou_type` 类属性切换；`iou_mean` 用 `register_buffer`（自动跟随 .to(device)）
-3. `train_variant.py` — `--iou wiou` 参数通过 `BboxLoss.iou_type = args.iou` 切换
+| Variant | P | R | mAP50 | mAP50-95 | FPS | GFLOPs | Params(M) | xlsx row | branch |
+|---|---:|---:|---:|---:|---:|---:|---:|:-:|:-|
+| baseline | — | — | 0.857 | 0.601 | — | 6.4 | 2.6 | 2 | — (用户已统计) |
+| +T | 0.856 | 0.805 | 0.859 | 0.602 | 244 | 6.4 | 2.60 | 3 | feat/triplet |
+| +D | 0.863 | 0.811 | 0.866 | 0.613 | 435 | 9.3 | 4.35 | 4 | feat/dyhead |
+| +W | 0.864 | 0.803 | 0.860 | 0.602 | 200 | 6.4 | 2.60 | 5 | feat/wiou |
+| +TD | 0.858 | 0.810 | 0.862 | 0.610 | 233 | 9.29 | 4.36 | 6 | feat/triplet-dyhead |
+| +TW | 0.858 | 0.810 | 0.863 | 0.605 | 208 | 6.4 | 2.58 | 7 | feat/triplet-wiou |
+| **+DW** | **0.860** | **0.819** | **0.870** | **0.613** | 109 | 9.3 | 4.35 | 8 | feat/dyhead-wiou |
+| **TDW** | TBD | TBD | TBD | TBD | TBD | 9.29 | 4.36 | 9 | **feat/tdw** ← 训练中 |
 
-**WIoU v3 公式**：
-- `r_wiou = exp(rho²/c²)` — c² 必须 detach（防止梯度作弊），clamp(max=10) 防 fp16 溢出
-- `r_focus = β / (δ * α^(β-δ))`，α=1.9, δ=3.0（论文 Table 6）
-- `β = L_iou / L_iou_mean`（每个 anchor 的相对难度）
-- `loss = r_focus * r_wiou * (1-iou) * weight`
+baseline 用户已自行统计，不需要再跑。
 
-**Smoke test 已通过 5/5（autodl 4090，AMP 安全）**
+### 3.2 TDW 关键观察点
+- 当前最强是 +DW（mAP50 0.870, mAP50-95 0.613）
+- +TD 比 +D 反而 mAP50-95 下降 0.3，提示 Triplet 在已有 DyHead 时增益不明显
+- 关键问题：**TDW 能否超过 +DW？** 决定论文最终模型选择
+- 若 TDW 不及 +DW，论文可能改用 +DW 作为最终模型，或重新论证 Triplet 必要性
 
-### 3.3 网络配置坑（autodl）
-- HTTPS clone/fetch：开 `source /etc/network_turbo`（学术加速只代理 HTTP/HTTPS）
-- SSH push：`/etc/network_turbo` 不代理 SSH，必须用 `ssh.github.com:443` 端口绕过墙
-- autodl 已配 `safe.directory` 解决 dubious ownership
+---
 
-### 3.4 .gitignore 规则
-- `runs/` 不在 ignore；用 `!runs/**` 白名单 + `runs/**/*.pt` + `runs/**/weights/` 排除大文件
-- `*.xlsx` 在 ignore（用户实验记录表只在本地）
-- `docs/about/*.pdf|.doc(x)` 在 ignore（用户隐私文档）
+## 4. 关键背景知识
 
-### 3.5 用户偏好（已观察到）
-- **直接动手**：不要每步问，能确定的就做
-- **保留训练记录完整性**：runs/ 入 git
-- **手动处理大件**：权重不替用户决定
-- **教学型日志**：CHANGELOG-WIOU.md 是面向复现的，新改动要追加 section
+### 4.1 项目结构
+- 仓库根：`/Users/asus/ultralytics`（Mac 开发）↔ `/root/autodl-tmp/ultralytics`（autodl RTX 4090 训练）
+- GitHub：`git@github.com:Asus-Github/yolo11.git`（public）
+- 数据集：`/root/autodl-tmp/ultralytics/datasets/dair_v2x_i/`（4940 train + 1411 val, 8 类）
+
+### 4.2 feat/tdw 分支构成
+- base = feat/dyhead-wiou（含 DyHead + WIoU）
+- cherry-pick = `b53004af0` (Triplet) + `69a3bde2d` (yolo11-td.yaml)
+- 即 = WIoU loss + DyHead head + Triplet at P5 end + yolo11-td.yaml + 切换 `--iou wiou`
+
+### 4.3 网络配置坑（autodl）
+- HTTPS clone/fetch：`source /etc/network_turbo`
+- SSH push：用 `ssh.github.com:443`（默认 22 被墙，已配在 ~/.ssh/config）
+- tmux：必须 `tmux set-option -t <name> remain-on-exit on`，否则命令结束后 session 销毁
+
+### 4.4 用户偏好
+- **直接动手**：能确定的就做，不要每步问
 - **简洁回复**：避免冗长总结，重点+下一步即可
-
-### 3.6 后续待做实验（按顺序）
-当前只完成 +W，剩余 7 组（按 xlsx 顺序）：
-- baseline (row 2) — 已有 baseline-v2 (mAP50=0.857)，可直接填入
-- +T (row 3) — 加 Triplet Attention
-- +D (row 4) — 加 DyHead
-- +TD (row 6) — Triplet+DyHead
-- +TW (row 7) — Triplet+WIoU
-- +DW (row 8) — DyHead+WIoU
-- TDW (row 9) — 完整模型
-
-T 和 D 模块**尚未集成代码**，开始下一步前需要先实现 yolo11-t.yaml / yolo11-d.yaml 和对应 backbone/head 修改。
+- **保留训练记录完整性**：runs/ 入 git（除 weights）
+- **手动处理大件**：权重不替用户决定归档策略
 
 ---
 
-## 4. 当前 git 状态
-```
-分支: feat/wiou
-最近 commits:
-  d3995f7 docs(changelog): add data-flow diagram and smoke test results
-  bead106 exp: archive existing pre-WIoU baseline runs from autodl
-  c97029e build(gitignore): allow runs/ artifacts (csv/yaml/jpg/png/log), keep weights out
-  8509a6d docs: expand CHANGELOG-WIOU into a teaching-oriented reproduction log
-  789ac20 feat(train_variant): wire --iou wiou to BboxLoss.iou_type
-  b085cd8 feat(loss): BboxLoss switch iou_type, WIoU v3 with iou_mean buffer
-  df8fffc feat(metrics): add WIoU branch returning (iou, r_wiou)
-```
+## 5. git 状态
 
-Mac 和 autodl 已同步，工作树干净（除非训练已写入新 runs/）。
+**本地分支**：feat/tdw（4fec0d361），已 push 到 origin/feat/tdw
+**autodl 分支**：feat/tdw，训练进行中，工作目录有 untracked: runs/+T_train.log, runs/+TD_train.log, runs/detect/runs/ablation/+T/, runs/detect/runs/ablation/+TD/（这些不属于本分支，训练完成后再决定是否清理）
 
 ---
 
-## 5. 立即可执行的第一条命令（接手后）
-
-如果用户说「训练好了」，第一步：
-```bash
-ssh autodl "tmux capture-pane -t w_train -p | tail -30"
-```
-确认 results.csv 已生成且 `EXITCODE=0`，再走 §2 流程。
-
-如果用户说继续做 +T/+D 模块集成，去读：
-- `/Users/asus/ultralytics/CHANGELOG-WIOU.md`（数据流图 + 改动模板）
-- 用户给的 4 份手册（在 docs/about/，gitignored）
-
----
-
-**最后更新**：2026-06-04 13:35
-
----
-
-## 6. 进度更新（2026-06-04 13:35）
-
-### +W 训练已完成（本分支专属）
-- 早停 epoch 234 / 300（patience=50）
-- best.pt val: P=86.4 / R=80.3 / mAP50=86.0 / mAP50-95=60.2 / FPS=200
-- 已 push 到 GitHub feat/wiou，本地 pull + scp 权重完成
-- xlsx row 5 已写入指标
-- **重要教训**：tmux 默认 `new -d 'cmd'` 在 cmd 结束后销毁 session。下次必须用 `tmux set-option remain-on-exit on` 或 `cmd; bash`
-
-### 分支结构（2026-06-04 已建立）
-- `feat/wiou`（本分支）— WIoU 代码 + +W 训练结果
-- `feat/triplet` — Triplet 代码 + +T 训练结果（独立分支，本分支不含 Triplet 代码）
-- 后续 `feat/dyhead`、`feat/triplet-wiou`、`feat/triplet-dyhead`、`feat/dyhead-wiou`、`feat/tdw`
-
-### +T 训练状态（在 autodl 上跑，但归属 feat/triplet 分支）
-- autodl 当前仍 checkout 在 feat/wiou（运行进程不依赖 git 状态，不切换以免污染本地缓存）
-- 训练完成后：scp +T 的 runs 到本地，**在本地切到 feat/triplet 后 commit**
-- 不要让 +T 的 runs 进入本分支
-
-### 关于 batch 一致性的统一约定
-- 所有变体用 `batch=0.85`（AutoBatch），实际 batch 各异（baseline=64, +W=62, +T=61, ...）
-- 论文 ablation table 加一列「Batch」列出实际值
-- 影响 < 0.5% mAP，主结论不受影响
+**最后更新**：2026-06-05 12:21（TDW 训练已启动，epoch 1/300 进行中）
