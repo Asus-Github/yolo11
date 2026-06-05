@@ -1818,7 +1818,8 @@ def parse_model(d, ch, verbose=True):
         elif m is TripletAttention:
             c1 = ch[f]
             c2 = c1
-            args = [c1]
+            # Forward any extra yaml args (e.g. no_spatial, kernel_size) after c1, c2
+            args = [c1, c2, *args]
         elif m in frozenset({TorchVision, Index}):
             c2 = args[0]
             c1 = ch[f]
