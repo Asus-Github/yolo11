@@ -667,3 +667,48 @@ class Index(nn.Module):
             (torch.Tensor): Selected tensor.
         """
         return x[self.index]
+
+
+class CoordAttention(nn.Module):
+    """Coordinate Attention (Hou et al., CVPR 2021).
+
+    Encodes positional information into channel attention via separate H and W
+    global average pooling, followed by a shared 1x1 conv reduction and two
+    independent 1x1 conv expansions (one per spatial direction).
+    Mechanism is "channel + position" — no 2D spatial attention map, so it is
+    orthogonal to DyHead's spatial-aware module.
+
+    References:
+        Hou et al. "Coordinate Attention for Efficient Mobile Network Design." CVPR 2021.
+    """
+
+    def __init__(self, c1: int, c2: int = None, reduction: int = 32):
+        """
+        Args:
+            c1: input channels (auto-passed by parse_model).
+            c2: ignored (output channels = c1, for parse_model compatibility).
+            reduction: channel reduction ratio for the shared bottleneck.
+        """
+        super().__init__()
+        mid = max(8, c1 // reduction)
+        self.pool_h = nn.AdaptiveAvgPool2d((None, 1))
+        self.pool_w = nn.AdaptiveAvgPool2d((1, None))
+        self.conv1 = nn.Conv2d(c1, mid, 1, bias=False)
+        self.bn1 = nn.BatchNorm2d(mid)
+        self.act = nn.SiLU(inplace=True)
+        self.conv_h = nn.Conv2d(mid, c1, 1, bias=False)
+        self.conv_w = nn.Conv2d(mid, c1, 1, bias=False)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        B, C, H, W = x.shape
+        # Encode position: pool along W → (B,C,H,1); pool along H → (B,C,1,W)
+        x_h = self.pool_h(x)                         # (B, C, H, 1)
+        x_w = self.pool_w(x).permute(0, 1, 3, 2)    # (B, C, 1, W) → (B, C, W, 1)
+        # Shared bottleneck on concatenated H+W encodings
+        y = torch.cat([x_h, x_w], dim=2)             # (B, C, H+W, 1)
+        y = self.act(self.bn1(self.conv1(y)))         # (B, mid, H+W, 1)
+        y_h, y_w = torch.split(y, [H, W], dim=2)
+        # Separate attention maps
+        a_h = self.conv_h(y_h).sigmoid()              # (B, C, H, 1)
+        a_w = self.conv_w(y_w).sigmoid().permute(0, 1, 3, 2)  # (B, C, 1, W)
+        return x * a_h * a_w

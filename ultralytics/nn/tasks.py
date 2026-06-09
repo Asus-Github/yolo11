@@ -44,6 +44,7 @@ from ultralytics.nn.modules import (
     Conv,
     Conv2,
     ConvTranspose,
+    CoordAttention,
     Detect,
     DWConv,
     DWConvTranspose2d,
@@ -1818,6 +1819,10 @@ def parse_model(d, ch, verbose=True):
             c2 = args[0]
             c1 = ch[f]
             args = [*args[1:]]
+        elif m is CoordAttention:
+            c1 = ch[f]
+            c2 = c1
+            args = [c1, c2, *args]
         else:
             c2 = ch[f]
 
