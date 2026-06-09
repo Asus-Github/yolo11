@@ -84,6 +84,7 @@ from .head import (
     Classify,
     Detect,
     DyHeadDetect,
+    DyHeadDetect3,
     LRPCHead,
     Pose,
     Pose26,

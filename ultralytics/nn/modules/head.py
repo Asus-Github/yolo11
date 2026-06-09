@@ -1903,3 +1903,9 @@ class DyHeadDetect(Detect):
         """Apply per-level DyHead refinement, then run the standard Detect head."""
         x = [self.dyhead[i](xi) for i, xi in enumerate(x)]
         return super().forward(x)
+
+
+class DyHeadDetect3(DyHeadDetect):
+    """DyHeadDetect with 3 cascaded blocks (default is 2)."""
+
+    num_blocks: int = 3
