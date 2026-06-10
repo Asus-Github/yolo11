@@ -103,3 +103,22 @@ PY
 
 - 若 DW-P2 ≈ DWCA-P2：说明 P2 高分辨率分支是主要贡献，CA 是轻量辅助。
 - 若 DW-P2 明显低于 DWCA-P2：说明 CA 与 P2 存在协同增益。
+
+## 训练结果（2026-06-10）
+
+- 训练状态：300 epochs completed；best epoch=253。
+- WIoU 确认：正式日志中已打印 `[DW-P2] BboxLoss.iou_type = wiou`。
+- best.pt fused summary：201 layers，4,452,040 parameters，14.2 GFLOPs。
+- 指标：P=85.6%，R=83.5%，mAP50=88.1%，mAP50-95=64.4%。
+- 输出目录：`runs/detect/runs/ablation/DW-P2/`；训练日志：`runs/DW-P2_train.log`。
+
+### 结果判读
+
+| Variant | P/% | R/% | mAP50/% | mAP50-95/% | GFLOPs | Params/M |
+|---|---:|---:|---:|---:|---:|---:|
+| +DW | 86.0 | 81.9 | 87.0 | 61.3 | 9.3 | 4.35 |
+| DWCA | 86.8 | 81.4 | 86.8 | 61.3 | 9.3 | 4.36 |
+| DW-P2 | 85.6 | 83.5 | 88.1 | 64.4 | 14.2 | 4.45 |
+| DWCA-P2 | 86.1 | 83.3 | 88.2 | 64.4 | 14.2 | 4.46 |
+
+DW-P2 在去掉 CoordAttention 后几乎复现 DWCA-P2 的 mAP50-95，并且 Recall 反而略高；说明 DWCA-P2 的主增益来自 P2/4 高分辨率检测分支，而不是 CA 单独贡献。CoordAttention 的作用更像轻量精度调节：DWCA-P2 相比 DW-P2 Precision +0.5、mAP50 +0.1，但 Recall -0.2、mAP50-95 持平。
