@@ -114,3 +114,21 @@ PY
 - 若 DWCA > +DW：说明 CoordAttention 是比 Triplet 更正交的轻量注意力补充。
 - 若 DWCA ≈ +DW 但 DW-P2 明显提升：说明 DWCA-P2 的主要贡献来自 P2 小目标检测头。
 - 若 DWCA 与 DW-P2 均低于 DWCA-P2：说明 CoordAttention 与 P2 分支存在协同增益。
+
+## 训练结果（2026-06-10）
+
+- 训练状态：300 epochs completed；best epoch=267。
+- WIoU 确认：正式日志中已打印 `[DWCA] BboxLoss.iou_type = wiou`。
+- best.pt fused summary：168 layers，4,357,526 parameters，9.3 GFLOPs。
+- 指标：P=86.8%，R=81.4%，mAP50=86.8%，mAP50-95=61.3%。
+- 输出目录：`runs/detect/runs/ablation/DWCA/`；训练日志：`runs/DWCA_train.log`。
+
+### 结果判读
+
+| Variant | P/% | R/% | mAP50/% | mAP50-95/% | GFLOPs | Params/M |
+|---|---:|---:|---:|---:|---:|---:|
+| +DW | 86.0 | 81.9 | 87.0 | 61.3 | 9.3 | 4.35 |
+| DWCA | 86.8 | 81.4 | 86.8 | 61.3 | 9.3 | 4.36 |
+| DWCA-P2 | 86.1 | 83.3 | 88.2 | 64.4 | 14.2 | 4.46 |
+
+DWCA 与 +DW 的 mAP50-95 基本持平，Precision 明显提高但 Recall 和 mAP50 略低；说明单独加入 CoordAttention 并没有带来稳定的高 IoU 定位增益。结合 DWCA-P2 的大幅提升，当前证据更支持：DWCA-P2 的核心收益主要来自 P2/4 高分辨率小目标分支，CoordAttention 更可能是轻量辅助或与 P2 形成协同，而不是单独主贡献。
