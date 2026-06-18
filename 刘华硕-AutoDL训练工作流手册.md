@@ -25,6 +25,7 @@
 ```
 
 **关键省钱原则**：
+
 - AutoDL **关机后还会按"硬盘"收费**（约 0.001 元/GB/h），但停止计费 GPU
 - 长期不用：**保留环境但删除大数据**，或迁移到 OSS
 - 4090 单卡训练 YOLOv11n-TDW 约 **4-6 小时/300epoch**，单组 ~10 元
@@ -44,19 +45,23 @@
 进入"算力市场" → 选 **"按量计费"**（按小时计费，停机不收 GPU 费）
 
 **GPU 推荐**：
+
 - 北京/上海/重庆区任选，**RTX 4090 24GB**，约 1.58-1.88 元/h
 - **避开"自如卡"**（部分共享卡，跑大模型可能掉速）
 
 **镜像推荐**（选错就要重装环境）：
+
 ```
 框架：PyTorch
 版本：PyTorch 2.3.0 (或 2.1.0/2.2.0 都行)
 Python：3.10 / 3.11
 CUDA：12.1 (或 11.8)
 ```
+
 **直接用 AutoDL 官方镜像**，不要选社区镜像。Ultralytics 在这个组合下 0 配置可跑。
 
 **硬盘**：
+
 - 系统盘：默认 50GB（够用，不要扩）
 - 数据盘：**不需要额外买**，使用 `/root/autodl-tmp` 即可（默认 50GB，够装 DAIR-V2X-I）
 
@@ -70,6 +75,7 @@ ssh -p 12345 root@connect.bjb1.seetacloud.com
 ```
 
 记下三件事：
+
 - 端口（如 12345）
 - 主机名（如 `connect.bjb1.seetacloud.com`）
 - 密码（点眼睛图标查看）
@@ -145,6 +151,7 @@ ssh-copy-id autodl
 ### 3.3 打开远程项目
 
 `File → Open Folder` → 输入 `/root/autodl-tmp` → OK
+
 - 这是 AutoDL 的**数据盘目录**，重启后保留
 - `/root` 也保留，但容量小（50GB）
 
@@ -166,6 +173,7 @@ source /etc/network_turbo
 #### 方案 A：通过 Gitee（推荐，可追溯版本）
 
 **本地 Mac 终端**：
+
 ```bash
 cd /Users/asus/ultralytics
 # 如果还没初始化 git
@@ -176,6 +184,7 @@ git push -u origin main
 ```
 
 **远程 AutoDL（Comate 终端）**：
+
 ```bash
 cd /root/autodl-tmp
 git clone https://gitee.com/你的用户名/ultralytics-tdw.git ultralytics
@@ -185,6 +194,7 @@ cd ultralytics
 #### 方案 B：直接 SCP 上传（不想用 git）
 
 **本地 Mac 终端**：
+
 ```bash
 # 排除大目录（runs/、datasets/）后打包上传
 rsync -avz --progress \
@@ -225,12 +235,14 @@ python -c "from ultralytics import YOLO; m = YOLO('ultralytics/cfg/models/11/yol
 ### 5.1 推荐方案：直接在 AutoDL 上下载
 
 DAIR-V2X 数据集由清华 AIR 发布，下载链接：
+
 - 官方页：https://thudair.baai.ac.cn/index
 - 注册后下载 **DAIR-V2X-I**（路侧子集，约 30GB）
 
 **在 AutoDL 上下载**：
+
 ```bash
-source /etc/network_turbo  # 启用学术加速
+source /etc/network_turbo # 启用学术加速
 cd /root/autodl-tmp
 mkdir -p datasets/dair_v2x_i && cd datasets/dair_v2x_i
 # 用 wget 或 axel 多线程下载（替换为你的实际链接）
@@ -243,6 +255,7 @@ unzip dair_v2x_i.zip
 ### 5.2 备选方案：本地下载后 rsync 上传
 
 如果你已经在本地下了：
+
 ```bash
 # 本地 Mac
 rsync -avz --progress /path/to/dair_v2x_i/ autodl:/root/autodl-tmp/datasets/dair_v2x_i/
@@ -255,10 +268,10 @@ rsync -avz --progress /path/to/dair_v2x_i/ autodl:/root/autodl-tmp/datasets/dair
 
 ```yaml
 # DAIR-V2X-I roadside vehicle detection
-path: /root/autodl-tmp/datasets/dair_v2x_i  # 数据集根目录
+path: /root/autodl-tmp/datasets/dair_v2x_i # 数据集根目录
 train: images/train
 val: images/val
-test: images/test  # 可选
+test: images/test # 可选
 
 names:
   0: car
@@ -306,7 +319,7 @@ tmux attach -t tdw
 
 ```python
 """YOLOv11n-TDW on DAIR-V2X-I, RTX 4090 single-card."""
-import os
+
 from ultralytics import YOLO
 from ultralytics.utils.loss import BboxLoss
 
@@ -320,7 +333,7 @@ if __name__ == "__main__":
         data="ultralytics/cfg/datasets/dair_v2x_i.yaml",
         epochs=300,
         imgsz=640,
-        batch=32,           # ★ 重要：8 组消融全部用 batch=32（控制变量），以最吃显存的 TDW 为基准
+        batch=32,  # ★ 重要：8 组消融全部用 batch=32（控制变量），以最吃显存的 TDW 为基准
         device=0,
         workers=8,
         optimizer="SGD",
@@ -330,9 +343,9 @@ if __name__ == "__main__":
         project="/root/autodl-tmp/runs/tdw",  # 保存到数据盘
         name="yolo11n-tdw-v1",
         seed=42,
-        amp=True,           # 自动混合精度，4090 强烈推荐
-        cache=False,        # 30GB 数据集太大不建议 cache=True
-        patience=50,        # 连续 50 epoch 无提升提前停止
+        amp=True,  # 自动混合精度，4090 强烈推荐
+        cache=False,  # 30GB 数据集太大不建议 cache=True
+        patience=50,  # 连续 50 epoch 无提升提前停止
     )
 ```
 
@@ -380,20 +393,20 @@ source /etc/network_turbo
 cd /root/autodl-tmp/ultralytics
 
 declare -A configs=(
-    ["baseline"]="yolo11.yaml ciou"
-    ["t"]="yolo11-t.yaml ciou"
-    ["d"]="yolo11-d.yaml ciou"
-    ["w"]="yolo11.yaml wiou"
-    ["td"]="yolo11-td.yaml ciou"
-    ["tw"]="yolo11-t.yaml wiou"
-    ["dw"]="yolo11-d.yaml wiou"
-    ["tdw"]="yolo11-tdw.yaml wiou"
+  ["baseline"]="yolo11.yaml ciou"
+  ["t"]="yolo11-t.yaml ciou"
+  ["d"]="yolo11-d.yaml ciou"
+  ["w"]="yolo11.yaml wiou"
+  ["td"]="yolo11-td.yaml ciou"
+  ["tw"]="yolo11-t.yaml wiou"
+  ["dw"]="yolo11-d.yaml wiou"
+  ["tdw"]="yolo11-tdw.yaml wiou"
 )
 
 for name in baseline t d w td tw dw tdw; do
-    read -r yaml iou <<< "${configs[$name]}"
-    echo "=== Running: $name ($yaml + $iou) ==="
-    python -c "
+  read -r yaml iou <<< "${configs[$name]}"
+  echo "=== Running: $name ($yaml + $iou) ==="
+  python -c "
 from ultralytics import YOLO
 from ultralytics.utils.loss import BboxLoss
 BboxLoss.iou_type = '$iou'
@@ -413,6 +426,7 @@ done
 ```
 
 执行：
+
 ```bash
 chmod +x run_ablation.sh
 tmux new -s ablation
@@ -431,6 +445,7 @@ tmux new -s ablation
 ### 8.1 同步整个 runs 目录回本地（recommended）
 
 **本地 Mac 终端**：
+
 ```bash
 mkdir -p /Users/asus/ultralytics/runs_remote
 rsync -avz --progress \
@@ -439,6 +454,7 @@ rsync -avz --progress \
 ```
 
 **只拉关键文件**（更快，权重 + 曲线 + csv）：
+
 ```bash
 rsync -avz --progress \
   --include='*/' \
@@ -469,6 +485,7 @@ rsync -avz --progress \
 ### 9.1 短期不用：**关机不释放**（保留数据盘 + 环境）
 
 AutoDL 控制台 → 你的实例 → **关机**
+
 - GPU 计费停止
 - **硬盘按 0.001 元/GB/h 继续计费**（50GB 约 0.05 元/h，一天 1.2 元）
 - 下次再开机数据和代码完整保留
@@ -500,6 +517,7 @@ oss cp -r /root/autodl-tmp/runs/ oss://your-bucket/
 ### 10.2 端口转发（远程看 TensorBoard / Visdom）
 
 Comate Remote-SSH 自动支持端口转发：
+
 ```bash
 # 在远程启动 tensorboard
 tensorboard --logdir /root/autodl-tmp/runs --port 6006
@@ -519,16 +537,16 @@ tensorboard --logdir /root/autodl-tmp/runs --port 6006
 
 ## 十一、常见问题速查
 
-| 问题 | 原因 | 解决 |
-|------|------|------|
-| `ssh: connection refused` | 实例关机了 | 控制台开机后重连 |
-| `pip install` 慢 | 没启用学术加速 | `source /etc/network_turbo` |
-| 训练中断（SSH 掉线） | 没用 tmux | 重连后 `tmux attach -t tdw` 看是否还在跑 |
-| `CUDA out of memory` | batch 太大 | batch 改 16 或 8 |
-| 训练完忘了关机 | 充值了 | 控制台手动关机；下次用 `&& shutdown` |
-| Remote-SSH 连接超时 | 首次安装 server 慢 | 等 1-2 分钟，或重试 |
-| 数据集找不到 | path 写错 | 用绝对路径 `/root/autodl-tmp/datasets/...` |
-| 结果在哪 | runs 路径 | `/root/autodl-tmp/runs/tdw/yolo11n-tdw-v1/` |
+| 问题                      | 原因               | 解决                                        |
+| ------------------------- | ------------------ | ------------------------------------------- |
+| `ssh: connection refused` | 实例关机了         | 控制台开机后重连                            |
+| `pip install` 慢          | 没启用学术加速     | `source /etc/network_turbo`                 |
+| 训练中断（SSH 掉线）      | 没用 tmux          | 重连后 `tmux attach -t tdw` 看是否还在跑    |
+| `CUDA out of memory`      | batch 太大         | batch 改 16 或 8                            |
+| 训练完忘了关机            | 充值了             | 控制台手动关机；下次用 `&& shutdown`        |
+| Remote-SSH 连接超时       | 首次安装 server 慢 | 等 1-2 分钟，或重试                         |
+| 数据集找不到              | path 写错          | 用绝对路径 `/root/autodl-tmp/datasets/...`  |
+| 结果在哪                  | runs 路径          | `/root/autodl-tmp/runs/tdw/yolo11n-tdw-v1/` |
 
 ---
 
@@ -585,6 +603,7 @@ tensorboard --logdir /root/autodl-tmp/runs --port 6006
 ---
 
 **下一步问我**：
+
 - 不会写 sequence-level 数据集划分脚本？
 - AutoDL 选不到 4090？
 - DAIR-V2X-I 下载链接找不到？
