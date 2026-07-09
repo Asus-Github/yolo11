@@ -1,4 +1,4 @@
-"""通用变体训练脚本 — 用于 TDW 消融实验
+"""通用变体训练脚本 — 用于 TDW 消融实验.
 
 支持参数：
     --cfg / -c   模型 yaml 路径（默认 yolo11n.yaml = baseline）
@@ -31,16 +31,18 @@
 - 物理 batch 各取自身最大值（不浪费显存）
 - ultralytics 自动用梯度累积补足
 """
+
 import argparse
 import sys
 from pathlib import Path
 
 import yaml
+
 from ultralytics import YOLO
 
 
 def patch_dataset_yaml(repo_root: Path) -> Path:
-    """把 dair_v2x_i.yaml 的 path 改成当前实际路径，写入 _runtime.yaml。"""
+    """把 dair_v2x_i.yaml 的 path 改成当前实际路径，写入 _runtime.yaml。."""
     src = repo_root / "datasets/dair_v2x_i/dair_v2x_i.yaml"
     cfg = yaml.safe_load(src.read_text())
     cfg["path"] = str(repo_root / "datasets/dair_v2x_i")
@@ -51,20 +53,16 @@ def patch_dataset_yaml(repo_root: Path) -> Path:
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("-c", "--cfg", default="yolo11n.yaml",
-                    help="模型 yaml（默认 yolo11n.yaml）")
-    ap.add_argument("--iou", choices=["ciou", "wiou"], default="ciou",
-                    help="IoU 损失类型（默认 ciou）")
+    ap.add_argument("-c", "--cfg", default="yolo11n.yaml", help="模型 yaml（默认 yolo11n.yaml）")
+    ap.add_argument("--iou", choices=["ciou", "wiou"], default="ciou", help="IoU 损失类型（默认 ciou）")
     ap.add_argument("-n", "--name", required=True, help="实验名 / 子目录名")
-    ap.add_argument("-b", "--batch", type=int, default=0,
-                    help="物理 batch；0 表示用 AutoBatch 探最大（默认 0）")
+    ap.add_argument("-b", "--batch", type=int, default=0, help="物理 batch；0 表示用 AutoBatch 探最大（默认 0）")
     ap.add_argument("--epochs", type=int, default=300)
     ap.add_argument("--patience", type=int, default=50)
     ap.add_argument("--device", default="0")
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--imgsz", type=int, default=640)
-    ap.add_argument("--probe", action="store_true",
-                    help="只跑 1 epoch 探最大 batch，不做完整训练")
+    ap.add_argument("--probe", action="store_true", help="只跑 1 epoch 探最大 batch，不做完整训练")
     args = ap.parse_args()
 
     repo_root = Path(__file__).resolve().parent
@@ -76,8 +74,10 @@ def main():
     else:
         batch = args.batch
 
-    print(f"[train_variant] cfg={args.cfg}  iou={args.iou}  name={args.name}  "
-          f"batch={batch}  epochs={args.epochs}  probe={args.probe}")
+    print(
+        f"[train_variant] cfg={args.cfg}  iou={args.iou}  name={args.name}  "
+        f"batch={batch}  epochs={args.epochs}  probe={args.probe}"
+    )
 
     model = YOLO(args.cfg)
 
@@ -86,7 +86,7 @@ def main():
         epochs=1 if args.probe else args.epochs,
         imgsz=args.imgsz,
         batch=batch,
-        nbs=64,                   # 关键：统一有效 batch=64，不论物理 batch 多少
+        nbs=64,  # 关键：统一有效 batch=64，不论物理 batch 多少
         device=args.device,
         workers=8,
         optimizer="SGD",
