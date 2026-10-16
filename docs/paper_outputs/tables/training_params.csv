@@ -1,0 +1,7 @@
+﻿参数,设置
+硬件,NVIDIA GeForce RTX 4090 24GB
+框架,Python 3.12.3，Ultralytics 8.4.56，PyTorch 2.7.0+cu128
+数据集划分,训练集/验证集/测试集=4940/1411/707
+输入尺寸,640 x 640
+训练参数,epochs=300，batch=32，optimizer=SGD，seed=42
+测速口径,batch=1，FPS=1000/(preprocess+inference+postprocess)

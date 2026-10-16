@@ -1,0 +1,40 @@
+﻿0,1,2,3,4,5,6,7,8,9,10,11,12,13
+FPS统一测量记录（2026-06-15）,,,,,,,,,,,,,
+RTX 4090 24GB；Ultralytics 8.4.56；torch 2.7.0+cu128；DAIR-V2X-I val=1411；imgsz=640；batch=1；FPS=1000/(preprocess+inference+postprocess)，排除 loss。,,,,,,,,,,,,,
+结论摘要：baseline-b32 速度最高；Triplet/WIoU 类改动较轻；DyHead 带来明显推理开销；P2 高分辨率小目标检测头是 DWCA-P2/DW-P2 速度下降的主要来源；DyHead D3 最慢之一。,,,,,,,,,,,,,
+,,,,,,,,,,,,,
+组别,对应Excel行,对应分支/代码目录,权重路径,设备,imgsz,batch,preprocess/ms,inference/ms,postprocess/ms,total/ms(不含loss),FPS_total(推荐填表),FPS_inference_only,分析结论
++T,3,origin/feat/triplet,/root/autodl-tmp/ultralytics/runs/detect/runs/ablation/+T/weights/best.pt,NVIDIA GeForce RTX 4090,640,1,0.54,5.59,0.74,6.87,145.62,178.96,Triplet 基本不增加计算量，速度接近轻量基线。
++D,4,feat/dyhead,/root/autodl-tmp/ultralytics/runs/detect/runs/ablation/+D/weights/best.pt,NVIDIA GeForce RTX 4090,640,1,0.53,7.01,0.74,8.28,120.8,142.64,DyHead 引入额外检测头计算，FPS 相比轻量基线明显下降。
++W,5,feat/wiou,/root/autodl-tmp/ultralytics/runs/detect/runs/ablation/+W/weights/best.pt,NVIDIA GeForce RTX 4090,640,1,0.58,5.78,0.84,7.2,138.97,173.06,WIoU 只影响训练损失，推理结构与 baseline 一致，FPS 应接近 baseline。
++TD,6,feat/triplet-dyhead,/root/autodl-tmp/ultralytics/runs/detect/runs/ablation/+TD/weights/best.pt,NVIDIA GeForce RTX 4090,640,1,0.57,7.54,0.76,8.87,112.73,132.62,Triplet + DyHead 叠加后速度低于单独 DyHead，主要瓶颈仍是 DyHead。
++TW,7,feat/triplet-wiou,/root/autodl-tmp/ultralytics/runs/detect/runs/ablation/+TW/weights/best.pt,NVIDIA GeForce RTX 4090,640,1,0.52,5.35,0.71,6.58,151.88,186.95,WIoU 不影响推理，Triplet 结构较轻，速度保持较高。
++DW,8,feat/dyhead-wiou,/root/autodl-tmp/ultralytics/runs/detect/runs/ablation/+DW/weights/best.pt,NVIDIA GeForce RTX 4090,640,1,0.54,6.83,0.73,8.1,123.43,146.43,DyHead + WIoU 的推理开销主要来自 DyHead，WIoU 本身不影响推理。
+TDW,"9,15",feat/tdw,/root/autodl-tmp/ultralytics/runs/detect/runs/ablation/TDW/weights/best.pt,NVIDIA GeForce RTX 4090,640,1,0.58,7.83,0.76,9.17,109.09,127.67,完整 TDW 含 Triplet + DyHead，速度低于 +DW，说明注意力叠加带来额外开销。
+TDW-CO,10,feat/tdw-co,/root/autodl-tmp/ultralytics/runs/detect/runs/ablation/TDW-CO/weights/best.pt,NVIDIA GeForce RTX 4090,640,1,0.53,7.32,0.73,8.58,116.51,136.68,channel-only Triplet 相比 TDW 略快，说明去除空间分支可降低部分开销。
+TDW-CO-P3,"20,21",feat/tdw-co-p3,/root/autodl-tmp/ultralytics/runs/detect/runs/ablation/TDW-CO-P3/weights/best.pt,NVIDIA GeForce RTX 4090,640,1,0.56,7.63,0.77,8.96,111.64,131.1,将 channel-only Triplet 移至 P3 后速度与 TDW-CO 接近，未形成明显速度优势。
+TDW-CO-D3,22,feat/tdw-co-d3,/root/autodl-tmp/ultralytics/runs/detect/runs/ablation/TDW-CO-D3/weights/best.pt,NVIDIA GeForce RTX 4090,640,1,0.59,8.85,0.8,10.24,97.64,112.93,DyHead 加深至 3 blocks 后速度最低之一，额外 DyHead block 带来明显推理开销。
+DWCA-P2,23,feat/dwca-p2,/root/autodl-tmp/ultralytics/runs/detect/runs/ablation/DWCA-P2/weights/best.pt,NVIDIA GeForce RTX 4090,640,1,0.52,8.33,0.76,9.6,104.12,120.04,当前主方案加入 P2 高分辨率小目标头，精度提升显著但 FPS 下降到约 104。
+DWCA,24,feat/dwca,/root/autodl-tmp/ultralytics/runs/detect/runs/ablation/DWCA/weights/best.pt,NVIDIA GeForce RTX 4090,640,1,0.54,7.11,0.72,8.37,119.52,140.66,CA-only 去除 P2 后速度恢复到约 120 FPS，说明 P2 分支是 DWCA-P2 主要速度开销。
+DW-P2,25,feat/dw-p2,/root/autodl-tmp/ultralytics/runs/ablation/DW-P2/weights/best.pt,NVIDIA GeForce RTX 4090,640,1,0.57,8.59,0.8,9.95,100.5,116.47,P2-only 与 DWCA-P2 速度接近，进一步说明 P2 高分辨率分支主导推理开销。
+DWCA-P2-b32,26,feat/dwca-p2,/root/autodl-tmp/ultralytics/runs/detect/runs/ablation/DWCA-P2-b32/weights/best.pt,NVIDIA GeForce RTX 4090,640,1,0.54,8.63,0.78,9.95,100.54,115.9,结构同 DWCA-P2，FPS 与 DWCA-P2/DW-P2 接近；batch=32 是训练口径，不影响 batch=1 推理结构。
+baseline-b32,27,main,/root/autodl-tmp/worktrees/ultralytics-baseline-b32/runs/detect/runs/ablation/baseline-b32/weights/best.pt,NVIDIA GeForce RTX 4090,640,1,0.56,5.21,0.77,6.54,152.99,192.02,轻量 baseline 速度最高，可作为改进模型 FPS 对照。
+,,,,,,,,,,,,,
+,,,,,,,,,,,,,
+速度分析排序（按 FPS_total 从高到低）,,,,,,,,,,,,,
+排名,组别,FPS_total,相对baseline-b32速度,说明,,,,,,,,,
+1,baseline-b32,152.99,100.0% of baseline-b32,轻量 baseline 速度最高，可作为改进模型 FPS 对照。,,,,,,,,,
+2,+TW,151.88,99.3% of baseline-b32,WIoU 不影响推理，Triplet 结构较轻，速度保持较高。,,,,,,,,,
+3,+T,145.62,95.2% of baseline-b32,Triplet 基本不增加计算量，速度接近轻量基线。,,,,,,,,,
+4,+W,138.97,90.8% of baseline-b32,WIoU 只影响训练损失，推理结构与 baseline 一致，FPS 应接近 baseline。,,,,,,,,,
+5,+DW,123.43,80.7% of baseline-b32,DyHead + WIoU 的推理开销主要来自 DyHead，WIoU 本身不影响推理。,,,,,,,,,
+6,+D,120.8,79.0% of baseline-b32,DyHead 引入额外检测头计算，FPS 相比轻量基线明显下降。,,,,,,,,,
+7,DWCA,119.52,78.1% of baseline-b32,CA-only 去除 P2 后速度恢复到约 120 FPS，说明 P2 分支是 DWCA-P2 主要速度开销。,,,,,,,,,
+8,TDW-CO,116.51,76.2% of baseline-b32,channel-only Triplet 相比 TDW 略快，说明去除空间分支可降低部分开销。,,,,,,,,,
+9,+TD,112.73,73.7% of baseline-b32,Triplet + DyHead 叠加后速度低于单独 DyHead，主要瓶颈仍是 DyHead。,,,,,,,,,
+10,TDW-CO-P3,111.64,73.0% of baseline-b32,将 channel-only Triplet 移至 P3 后速度与 TDW-CO 接近，未形成明显速度优势。,,,,,,,,,
+11,TDW,109.09,71.3% of baseline-b32,完整 TDW 含 Triplet + DyHead，速度低于 +DW，说明注意力叠加带来额外开销。,,,,,,,,,
+12,DWCA-P2,104.12,68.1% of baseline-b32,当前主方案加入 P2 高分辨率小目标头，精度提升显著但 FPS 下降到约 104。,,,,,,,,,
+13,DWCA-P2-b32,100.54,65.7% of baseline-b32,结构同 DWCA-P2，FPS 与 DWCA-P2/DW-P2 接近；batch=32 是训练口径，不影响 batch=1 推理结构。,,,,,,,,,
+14,DW-P2,100.5,65.7% of baseline-b32,P2-only 与 DWCA-P2 速度接近，进一步说明 P2 高分辨率分支主导推理开销。,,,,,,,,,
+15,TDW-CO-D3,97.64,63.8% of baseline-b32,DyHead 加深至 3 blocks 后速度最低之一，额外 DyHead block 带来明显推理开销。,,,,,,,,,

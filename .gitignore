@@ -222,3 +222,6 @@ docs/about/*.docx
 !runs/**
 runs/**/*.pt
 runs/**/weights/
+
+# Claude Code personal local settings (do not commit)
+.claude/settings.local.json
