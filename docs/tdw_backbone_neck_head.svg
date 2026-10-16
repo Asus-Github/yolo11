@@ -1,0 +1,180 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1760" height="1180" viewBox="0 0 1760 1180">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#111827"/>
+    </marker>
+    <style>
+      .title { font: 700 30px Arial, Helvetica, sans-serif; fill: #111827; }
+      .note { font: 15px Arial, Helvetica, sans-serif; fill: #374151; }
+      .section { font: 700 24px Arial, Helvetica, sans-serif; fill: #111827; }
+      .block { font: 700 16px Arial, Helvetica, sans-serif; fill: #111827; }
+      .sub { font: 13px Arial, Helvetica, sans-serif; fill: #374151; }
+      .tiny { font: 12px Arial, Helvetica, sans-serif; fill: #4b5563; }
+      .stage { fill: #fafafa; stroke: #9ca3af; stroke-width: 1.8; rx: 18; ry: 18; }
+      .module { stroke: #111827; stroke-width: 1.5; rx: 8; ry: 8; }
+      .source { stroke: #6b7280; stroke-width: 1.2; rx: 8; ry: 8; }
+      .triplet { stroke: #b45309; stroke-width: 3; rx: 8; ry: 8; }
+      .dyhead { stroke: #be123c; stroke-width: 3; rx: 8; ry: 8; }
+      .edge { stroke: #111827; stroke-width: 2.2; fill: none; marker-end: url(#arrow); }
+      .thin { stroke: #6b7280; stroke-width: 1.8; fill: none; marker-end: url(#arrow); }
+      .loss { stroke-dasharray: 8 6; }
+    </style>
+  </defs>
+
+  <rect width="1760" height="1180" fill="#ffffff"/>
+  <text x="880" y="60" text-anchor="middle" class="title">YOLO11-TDW Network Architecture</text>
+
+  <rect x="60" y="120" width="520" height="880" class="stage"/>
+  <text x="320" y="158" text-anchor="middle" class="section">Backbone</text>
+
+  <rect x="650" y="120" width="760" height="880" class="stage"/>
+  <text x="1030" y="158" text-anchor="middle" class="section">Neck</text>
+
+  <rect x="1470" y="120" width="230" height="880" class="stage"/>
+  <text x="1585" y="158" text-anchor="middle" class="section">Head</text>
+
+  <rect x="105" y="210" width="150" height="64" class="module" fill="#eef2ff"/>
+  <text x="180" y="236" text-anchor="middle" class="block">Input</text>
+  <text x="180" y="258" text-anchor="middle" class="sub">640×640×3</text>
+
+  <rect x="310" y="210" width="190" height="64" class="module" fill="#dbeafe"/>
+  <text x="405" y="236" text-anchor="middle" class="block">Conv</text>
+  <text x="405" y="258" text-anchor="middle" class="sub">P1 / 2</text>
+
+  <rect x="310" y="320" width="190" height="64" class="module" fill="#dbeafe"/>
+  <text x="405" y="346" text-anchor="middle" class="block">Conv + C3k2</text>
+  <text x="405" y="368" text-anchor="middle" class="sub">P2 / 4</text>
+
+  <rect x="310" y="430" width="190" height="64" class="module" fill="#bfdbfe"/>
+  <text x="405" y="456" text-anchor="middle" class="block">Conv + C3k2</text>
+  <text x="405" y="478" text-anchor="middle" class="sub">P3 / 8</text>
+
+  <rect x="310" y="540" width="190" height="64" class="module" fill="#93c5fd"/>
+  <text x="405" y="566" text-anchor="middle" class="block">Conv + C3k2</text>
+  <text x="405" y="588" text-anchor="middle" class="sub">P4 / 16</text>
+
+  <rect x="310" y="650" width="190" height="64" class="module" fill="#60a5fa"/>
+  <text x="405" y="676" text-anchor="middle" class="block">Conv + C3k2</text>
+  <text x="405" y="698" text-anchor="middle" class="sub">P5 / 32</text>
+
+  <rect x="310" y="760" width="190" height="64" class="triplet" fill="#fde68a"/>
+  <text x="405" y="786" text-anchor="middle" class="block">TripletAttention</text>
+  <text x="405" y="808" text-anchor="middle" class="sub">layer 9 · NEW</text>
+
+  <rect x="310" y="870" width="190" height="64" class="module" fill="#93c5fd"/>
+  <text x="405" y="896" text-anchor="middle" class="block">SPPF + C2PSA</text>
+  <text x="405" y="918" text-anchor="middle" class="sub">P5 source</text>
+
+  <rect x="700" y="210" width="140" height="64" class="module" fill="#dcfce7"/>
+  <text x="770" y="236" text-anchor="middle" class="block">Upsample</text>
+  <text x="770" y="258" text-anchor="middle" class="sub">P5 ×2</text>
+
+  <rect x="915" y="176" width="120" height="44" class="source" fill="#f3f4f6"/>
+  <text x="975" y="204" text-anchor="middle" class="sub">P4 source</text>
+  <rect x="915" y="242" width="150" height="64" class="module" fill="#bbf7d0"/>
+  <text x="990" y="268" text-anchor="middle" class="block">Concat</text>
+  <text x="990" y="290" text-anchor="middle" class="sub">P5 ↑ + P4</text>
+  <rect x="1160" y="242" width="150" height="64" class="module" fill="#86efac"/>
+  <text x="1235" y="268" text-anchor="middle" class="block">C3k2</text>
+  <text x="1235" y="290" text-anchor="middle" class="sub">N4</text>
+
+  <rect x="700" y="370" width="140" height="64" class="module" fill="#dcfce7"/>
+  <text x="770" y="396" text-anchor="middle" class="block">Upsample</text>
+  <text x="770" y="418" text-anchor="middle" class="sub">N4 ×2</text>
+
+  <rect x="915" y="336" width="120" height="44" class="source" fill="#f3f4f6"/>
+  <text x="975" y="364" text-anchor="middle" class="sub">P3 source</text>
+  <rect x="915" y="402" width="150" height="64" class="module" fill="#bbf7d0"/>
+  <text x="990" y="428" text-anchor="middle" class="block">Concat</text>
+  <text x="990" y="450" text-anchor="middle" class="sub">N4 ↑ + P3</text>
+  <rect x="1160" y="402" width="150" height="64" class="module" fill="#86efac"/>
+  <text x="1235" y="428" text-anchor="middle" class="block">C3k2</text>
+  <text x="1235" y="450" text-anchor="middle" class="sub">P3 output</text>
+
+  <rect x="700" y="575" width="140" height="64" class="module" fill="#dcfce7"/>
+  <text x="770" y="601" text-anchor="middle" class="block">Conv</text>
+  <text x="770" y="623" text-anchor="middle" class="sub">P3 stride 2</text>
+
+  <rect x="915" y="541" width="120" height="44" class="source" fill="#f3f4f6"/>
+  <text x="975" y="569" text-anchor="middle" class="sub">N4 source</text>
+  <rect x="915" y="607" width="150" height="64" class="module" fill="#bbf7d0"/>
+  <text x="990" y="633" text-anchor="middle" class="block">Concat</text>
+  <text x="990" y="655" text-anchor="middle" class="sub">P3 ↓ + N4</text>
+  <rect x="1160" y="607" width="150" height="64" class="module" fill="#86efac"/>
+  <text x="1235" y="633" text-anchor="middle" class="block">C3k2</text>
+  <text x="1235" y="655" text-anchor="middle" class="sub">P4 output</text>
+
+  <rect x="700" y="780" width="140" height="64" class="module" fill="#dcfce7"/>
+  <text x="770" y="806" text-anchor="middle" class="block">Conv</text>
+  <text x="770" y="828" text-anchor="middle" class="sub">P4 stride 2</text>
+
+  <rect x="915" y="746" width="120" height="44" class="source" fill="#f3f4f6"/>
+  <text x="975" y="774" text-anchor="middle" class="sub">P5 source</text>
+  <rect x="915" y="812" width="150" height="64" class="module" fill="#bbf7d0"/>
+  <text x="990" y="838" text-anchor="middle" class="block">Concat</text>
+  <text x="990" y="860" text-anchor="middle" class="sub">P4 ↓ + P5</text>
+  <rect x="1160" y="812" width="150" height="64" class="module" fill="#86efac"/>
+  <text x="1235" y="838" text-anchor="middle" class="block">C3k2</text>
+  <text x="1235" y="860" text-anchor="middle" class="sub">P5 output</text>
+
+  <rect x="1500" y="420" width="170" height="96" class="dyhead" fill="#fecaca"/>
+  <text x="1585" y="452" text-anchor="middle" class="block">DyHeadDetect</text>
+  <text x="1585" y="476" text-anchor="middle" class="sub">Spatial</text>
+  <text x="1585" y="496" text-anchor="middle" class="sub">Scale · Task</text>
+
+  <rect x="1500" y="610" width="170" height="74" class="module" fill="#fff1f2"/>
+  <text x="1585" y="638" text-anchor="middle" class="block">Prediction</text>
+  <text x="1585" y="662" text-anchor="middle" class="sub">box / cls</text>
+
+  <rect x="1500" y="760" width="170" height="74" class="dyhead" fill="#ffe4e6"/>
+  <text x="1585" y="788" text-anchor="middle" class="block">Loss</text>
+  <text x="1585" y="812" text-anchor="middle" class="sub">WIoU v3 + cls + dfl</text>
+
+  <path d="M255 242 H310" class="edge"/>
+  <path d="M405 274 V320" class="edge"/>
+  <path d="M405 384 V430" class="edge"/>
+  <path d="M405 494 V540" class="edge"/>
+  <path d="M405 604 V650" class="edge"/>
+  <path d="M405 714 V760" class="edge"/>
+  <path d="M405 824 V870" class="edge"/>
+
+  <path d="M500 902 H610 V242 H700" class="edge"/>
+  <path d="M840 242 H915" class="edge"/>
+  <path d="M975 220 V242" class="thin"/>
+  <path d="M1065 274 H1160" class="edge"/>
+
+  <path d="M1235 306 V326 H770 V370" class="edge"/>
+  <path d="M840 402 H915" class="edge"/>
+  <path d="M975 380 V402" class="thin"/>
+  <path d="M1065 434 H1160" class="edge"/>
+
+  <path d="M1235 466 V525 H770 V575" class="edge"/>
+  <path d="M840 607 H915" class="edge"/>
+  <path d="M975 585 V607" class="thin"/>
+  <path d="M1065 639 H1160" class="edge"/>
+
+  <path d="M1235 671 V730 H770 V780" class="edge"/>
+  <path d="M840 812 H915" class="edge"/>
+  <path d="M975 790 V812" class="thin"/>
+  <path d="M1065 844 H1160" class="edge"/>
+
+  <path d="M1310 434 H1415 V440 H1500" class="edge"/>
+  <text x="1378" y="423" class="tiny">P3</text>
+  <path d="M1310 639 H1415 V468 H1500" class="edge"/>
+  <text x="1378" y="628" class="tiny">P4</text>
+  <path d="M1310 844 H1415 V496 H1500" class="edge"/>
+  <text x="1378" y="833" class="tiny">P5</text>
+  <path d="M1585 516 V610" class="edge"/>
+  <path d="M1670 468 H1700 V797 H1670" class="edge loss"/>
+  <text x="1685" y="635" text-anchor="middle" class="tiny">train</text>
+  <text x="1685" y="651" text-anchor="middle" class="tiny">only</text>
+
+  <rect x="90" y="1040" width="1580" height="78" fill="#f8fafc" stroke="#d1d5db" stroke-width="1.5" rx="12"/>
+  <rect x="130" y="1060" width="28" height="22" fill="#fde68a" stroke="#b45309" stroke-width="2"/>
+  <text x="170" y="1077" class="tiny">Backbone 改进：P5 末端插入 TripletAttention</text>
+  <rect x="520" y="1060" width="28" height="22" fill="#fecaca" stroke="#be123c" stroke-width="2"/>
+  <text x="560" y="1077" class="tiny">Head 改进：Detect 替换为 DyHeadDetect</text>
+  <rect x="895" y="1060" width="28" height="22" fill="#ffe4e6" stroke="#be123c" stroke-width="2"/>
+  <text x="935" y="1077" class="tiny">Loss 改进：CIoU 替换为 WIoU v3</text>
+  <text x="130" y="1100" class="tiny">灰色来源框表示参与 Neck 多尺度融合的旁路特征来源。</text>
+</svg>

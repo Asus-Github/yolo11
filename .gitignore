@@ -196,6 +196,7 @@ calibration_*.npy
 *.tiff
 *.gif
 *.svg
+!docs/tdw_backbone_neck_head.svg
 *.webp
 *.heic
 *.ico

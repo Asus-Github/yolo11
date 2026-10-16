@@ -1,0 +1,2 @@
+class,precision_baseline,recall_baseline,mAP50_baseline,mAP50_95_baseline,precision_proposed,recall_proposed,mAP50_proposed,mAP50_95_proposed,precision_gain,recall_gain,mAP50_gain,mAP50_95_gain
+all,0.857,0.808,0.86,0.602,0.86,0.835,0.884,0.644,0.003,0.027,0.024,0.042

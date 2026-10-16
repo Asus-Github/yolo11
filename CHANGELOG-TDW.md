@@ -17,47 +17,9 @@ No new yaml needed — TDW reuses `yolo11-td.yaml` (which already has Triplet in
 
 ## 2. Network architecture (TDW = yolo11-td.yaml + WIoU)
 
-### 2.1 Block-level diagram
+### 2.1 Backbone-Neck-Head framework
 
-```mermaid
-flowchart LR
-    Input["Input 640x640x3"] --> P1["Conv P1/2"]
-    P1 --> P2["Conv P2/4"]
-    P2 --> C3k2_2["C3k2"]
-    C3k2_2 --> P3conv["Conv P3/8"]
-    P3conv --> C3k2_4["C3k2 layer 4 (P3 src)"]
-    C3k2_4 --> P4conv["Conv P4/16"]
-    P4conv --> C3k2_6["C3k2 layer 6 (P4 src)"]
-    C3k2_6 --> P5conv["Conv P5/32"]
-    P5conv --> C3k2_8["C3k2 layer 8"]
-    C3k2_8 --> Triplet["TripletAttention layer 9 (NEW vs baseline)"]
-    Triplet --> SPPF["SPPF layer 10"]
-    SPPF --> C2PSA["C2PSA layer 11 (P5 src)"]
-
-    C2PSA --> Up1["Upsample x2"]
-    Up1 --> Cat_P4["Concat with P4 src"]
-    C3k2_6 --> Cat_P4
-    Cat_P4 --> C3k2_14["C3k2 layer 14"]
-    C3k2_14 --> Up2["Upsample x2"]
-    Up2 --> Cat_P3["Concat with P3 src"]
-    C3k2_4 --> Cat_P3
-    Cat_P3 --> C3k2_17["C3k2 layer 17 (P3 out)"]
-
-    C3k2_17 --> Down1["Conv stride 2"]
-    Down1 --> Cat_P4d["Concat with C3k2_14"]
-    C3k2_14 --> Cat_P4d
-    Cat_P4d --> C3k2_20["C3k2 layer 20 (P4 out)"]
-    C3k2_20 --> Down2["Conv stride 2"]
-    Down2 --> Cat_P5d["Concat with C2PSA"]
-    C2PSA --> Cat_P5d
-    Cat_P5d --> C3k2_23["C3k2 layer 23 (P5 out)"]
-
-    C3k2_17 --> DyHead["DyHeadDetect layer 24 (NEW vs baseline) - per-level: spatial -> scale -> task DyReLU-B"]
-    C3k2_20 --> DyHead
-    C3k2_23 --> DyHead
-
-    DyHead --> Loss["Loss = BboxLoss (WIoU v3, NEW vs baseline) + cls + dfl"]
-```
+![YOLO11-TDW Backbone-Neck-Head framework](docs/tdw_backbone_neck_head.svg)
 
 Three changes vs YOLOv11n baseline:
 

@@ -1,0 +1,608 @@
+[local] $ ssh autodl 'cat > /root/autodl-tmp/ducc_wiou_train.py <<'"'"'PY'"'"'
+
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+import yaml
+
+# This helper lives outside the repo, so put the checked-out repo on sys.path
+# before importing the local ultralytics package.
+sys.path.insert(0, str(Path.cwd()))
+from ultralytics import YOLO
+from ultralytics.utils.loss import BboxLoss
+
+
+def patch_dataset_yaml(repo_root: Path) -> Path:
+    src = repo_root / "datasets/dair_v2x_i/dair_v2x_i.yaml"
+    cfg = yaml.safe_load(src.read_text())
+    cfg["path"] = str(repo_root / "datasets/dair_v2x_i")
+    out = repo_root / "datasets/dair_v2x_i/_runtime.yaml"
+    out.write_text(yaml.safe_dump(cfg, sort_keys=False, allow_unicode=True))
+    return out
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--cfg", required=True)
+    ap.add_argument("--name", required=True)
+    ap.add_argument("--epochs", type=int, required=True)
+    ap.add_argument("--batch", required=True)
+    ap.add_argument("--imgsz", type=int, default=640)
+    ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--device", default="0")
+    ap.add_argument("--project", default="runs/ablation")
+    ap.add_argument("--workers", type=int, default=8)
+    ap.add_argument("--patience", type=int, default=50)
+    ap.add_argument("--nbs", type=int, default=64)
+    ap.add_argument("--pretrained", choices=["true", "false"], default="true")
+    ap.add_argument("--cos-lr", action="store_true")
+    ap.add_argument("--plots", action="store_true")
+    ap.add_argument("--exist-ok", action="store_true")
+    args = ap.parse_args()
+
+    repo_root = Path.cwd()
+    data_yaml = patch_dataset_yaml(repo_root)
+
+    BboxLoss.iou_type = "wiou"
+    print(f"[ducc_wiou_train] BboxLoss.iou_type = {BboxLoss.iou_type}", flush=True)
+    if BboxLoss.iou_type != "wiou":
+        raise RuntimeError("WIoU setup failed: BboxLoss.iou_type is not wiou")
+
+    batch = float(args.batch) if "." in str(args.batch) else int(args.batch)
+
+    model = YOLO(args.cfg)
+    model.info(detailed=False, verbose=True)
+    model.train(
+        data=str(data_yaml),
+        epochs=args.epochs,
+        imgsz=args.imgsz,
+        batch=batch,
+        nbs=args.nbs,
+        device=args.device,
+        workers=args.workers,
+        optimizer="SGD",
+        lr0=0.01,
+        cos_lr=args.cos_lr,
+        weight_decay=0.0005,
+        project=args.project,
+        name=args.name,
+        seed=args.seed,
+        pretrained=(args.pretrained == "true"),
+        amp=True,
+        cache=False,
+        patience=args.patience,
+        exist_ok=args.exist_ok,
+        plots=args.plots,
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+
+PY
+chmod +x /root/autodl-tmp/ducc_wiou_train.py'
+Warning: Permanently added '[connect.bjb1.seetacloud.com]:44080' (ED25519) to the list of known hosts.
+[local] $ ssh autodl 'cat > /root/autodl-tmp/ducc_collect_result.py <<'"'"'PY'"'"'
+
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import csv
+import json
+import re
+from pathlib import Path
+
+
+def parse_results(exp: str) -> dict:
+    run_dir = Path("runs/detect/runs/ablation") / exp
+    csv_path = run_dir / "results.csv"
+    if not csv_path.exists():
+        raise FileNotFoundError(csv_path)
+    rows = list(csv.DictReader(csv_path.open()))
+    if not rows:
+        raise RuntimeError(f"empty results.csv: {csv_path}")
+
+    def get(row, name):
+        for k, v in row.items():
+            if k.strip() == name:
+                return v
+        return None
+
+    best = max(rows, key=lambda r: float(get(r, "metrics/mAP50-95(B)") or 0))
+    out = {
+        "name": exp,
+        "epochs_recorded": len(rows),
+        "best_epoch": int(float(get(best, "epoch"))),
+        "precision": float(get(best, "metrics/precision(B)")),
+        "recall": float(get(best, "metrics/recall(B)")),
+        "map50": float(get(best, "metrics/mAP50(B)")),
+        "map50_95": float(get(best, "metrics/mAP50-95(B)")),
+        "run_dir": str(run_dir),
+    }
+
+    log_path = Path("runs") / f"{exp}_train.log"
+    out["log_path"] = str(log_path)
+    if log_path.exists():
+        txt = log_path.read_text(errors="replace")
+        matches = re.findall(r"summary(?: \(fused\))?: .*?([0-9,]+) parameters.*?([0-9.]+) GFLOPs", txt)
+        if matches:
+            params_s, gflops_s = matches[-1]
+            out["params_m"] = round(int(params_s.replace(",", "")) / 1_000_000, 2)
+            out["gflops"] = round(float(gflops_s), 2)
+        out["wiou_logged"] = "[ducc_wiou_train] BboxLoss.iou_type = wiou" in txt
+    else:
+        out["wiou_logged"] = False
+    print(json.dumps(out, ensure_ascii=False))
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--exp", required=True)
+    args = ap.parse_args()
+    parse_results(args.exp)
+
+
+if __name__ == "__main__":
+    main()
+
+PY
+chmod +x /root/autodl-tmp/ducc_collect_result.py'
+Warning: Permanently added '[connect.bjb1.seetacloud.com]:44080' (ED25519) to the list of known hosts.
+[local] $ ssh autodl 'cat > /root/autodl-tmp/ducc_structure_check.py <<'"'"'PY'"'"'
+
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+import sys
+
+# This checker lives outside the repo, so put the checked-out repo on sys.path
+# before importing the local ultralytics package.
+sys.path.insert(0, str(Path.cwd()))
+from ultralytics import YOLO
+from ultralytics.utils.loss import BboxLoss
+
+
+def require(cond: bool, msg: str) -> None:
+    if not cond:
+        raise AssertionError(msg)
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--yaml", required=True)
+    ap.add_argument("--kind", required=True)
+    ap.add_argument("--changelog", required=True)
+    args = ap.parse_args()
+
+    y = Path(args.yaml)
+    c = Path(args.changelog)
+    require(y.exists(), f"YAML missing: {y}")
+    require(c.exists(), f"CHANGELOG missing: {c}")
+    txt = y.read_text()
+
+    if args.kind == "tdw_co_p3":
+        require("TripletAttention" in txt and "True" in txt, "TDW-CO-P3 must include channel-only TripletAttention [True]")
+        require("DyHeadDetect" in txt, "TDW-CO-P3 must use DyHeadDetect")
+        require("DyHeadDetect3" not in txt, "TDW-CO-P3 should not use DyHeadDetect3")
+    elif args.kind == "tdw_co_d3":
+        require("DyHeadDetect3" in txt, "TDW-CO-D3 must use DyHeadDetect3")
+        head = Path("ultralytics/nn/modules/head.py").read_text()
+        init = Path("ultralytics/nn/modules/__init__.py").read_text()
+        tasks = Path("ultralytics/nn/tasks.py").read_text()
+        require("class DyHeadDetect3" in head, "DyHeadDetect3 class missing in head.py")
+        require("DyHeadDetect3" in init, "DyHeadDetect3 export missing")
+        require("DyHeadDetect3" in tasks, "DyHeadDetect3 parse_model registration/import missing")
+    elif args.kind == "dwca_p2":
+        require("CoordAttention" in txt, "DWCA-P2 YAML must include CoordAttention")
+        require("DyHeadDetect" in txt, "DWCA-P2 must use DyHeadDetect")
+        require(txt.count("Concat") >= 6, "DWCA-P2 should have P2/P3/P4/P5 neck with multiple Concat ops")
+        conv = Path("ultralytics/nn/modules/conv.py").read_text()
+        init = Path("ultralytics/nn/modules/__init__.py").read_text()
+        tasks = Path("ultralytics/nn/tasks.py").read_text()
+        require("class CoordAttention" in conv, "CoordAttention class missing in conv.py")
+        require("CoordAttention" in init, "CoordAttention export missing")
+        require("CoordAttention" in tasks, "CoordAttention parse_model registration/import missing")
+    else:
+        raise AssertionError(f"unknown kind: {args.kind}")
+
+    BboxLoss.iou_type = "wiou"
+    require(BboxLoss.iou_type == "wiou", "BboxLoss.iou_type did not become wiou")
+    print(f"[ducc_preflight] BboxLoss.iou_type = {BboxLoss.iou_type}")
+    model = YOLO(str(y))
+    model.info(detailed=False, verbose=True)
+    print(f"[ducc_preflight] structure check passed: {args.kind} {args.yaml}")
+
+
+if __name__ == "__main__":
+    main()
+
+PY
+chmod +x /root/autodl-tmp/ducc_structure_check.py'
+Warning: Permanently added '[connect.bjb1.seetacloud.com]:44080' (ED25519) to the list of known hosts.
+
+=== Preflight TDW-CO-P3 ===
+[local] $ ssh autodl '
+set -euo pipefail
+source /etc/network_turbo
+cd /root/autodl-tmp/ultralytics
+git fetch origin
+git checkout feat/tdw-co-p3
+git pull --ff-only origin feat/tdw-co-p3
+/root/miniconda3/bin/python /root/autodl-tmp/ducc_structure_check.py --yaml ultralytics/cfg/models/11/yolo11-tdw-co-p3.yaml --kind tdw_co_p3 --changelog CHANGELOG-TDW-CO-P3.md
+'
+Warning: Permanently added '[connect.bjb1.seetacloud.com]:44080' (ED25519) to the list of known hosts.
+设置成功
+注意：仅限于学术用途和加速访问github/huggingface，不承诺稳定性保证
+Your branch is up to date with 'origin/feat/tdw-co-p3'.
+Already on 'feat/tdw-co-p3'
+From ssh://ssh.github.com:443/Asus-Github/yolo11
+ * branch              feat/tdw-co-p3 -> FETCH_HEAD
+Already up to date.
+[ducc_preflight] BboxLoss.iou_type = wiou
+WARNING ⚠️ no model scale passed. Assuming scale='n'.
+YOLO11-tdw-co-p3 summary: 250 layers, 4,395,006 parameters, 4,394,990 gradients, 9.7 GFLOPs
+[ducc_preflight] structure check passed: tdw_co_p3 ultralytics/cfg/models/11/yolo11-tdw-co-p3.yaml
+
+=== Smoke TDW-CO-P3 ===
+[local] $ ssh autodl '
+set -euo pipefail
+(tmux has-session -t t_train_tdw_co_p3_wiou_smoke 2>/dev/null && tmux kill-session -t t_train_tdw_co_p3_wiou_smoke) || true
+rm -f /root/autodl-tmp/t_train_tdw_co_p3_wiou_smoke.done /root/autodl-tmp/t_train_tdw_co_p3_wiou_smoke.status
+tmux new-session -d -s t_train_tdw_co_p3_wiou_smoke
+tmux set-option -t t_train_tdw_co_p3_wiou_smoke remain-on-exit on
+tmux set-option -g mouse on
+tmux set-window-option -g history-limit 100000
+tmux send-keys -t t_train_tdw_co_p3_wiou_smoke '"'"'rm -f /root/autodl-tmp/t_train_tdw_co_p3_wiou_smoke.done /root/autodl-tmp/t_train_tdw_co_p3_wiou_smoke.status; ( source /etc/network_turbo && cd /root/autodl-tmp/ultralytics && /root/miniconda3/bin/python /root/autodl-tmp/ducc_wiou_train.py --cfg ultralytics/cfg/models/11/yolo11-tdw-co-p3.yaml --name _smoke_TDW-CO-P3 --epochs 1 --batch 0.85 --imgsz 640 --seed 42 --project runs/ablation --patience 50 --nbs 64 --pretrained true --cos-lr --exist-ok --plots 2>&1 | tee runs/TDW-CO-P3_smoke.log ); rc=$?; echo $rc > /root/autodl-tmp/t_train_tdw_co_p3_wiou_smoke.status; touch /root/autodl-tmp/t_train_tdw_co_p3_wiou_smoke.done; exit $rc'"'"' Enter
+'
+Warning: Permanently added '[connect.bjb1.seetacloud.com]:44080' (ED25519) to the list of known hosts.
+[local] $ ssh autodl 'test -f /root/autodl-tmp/t_train_tdw_co_p3_wiou_smoke.done && cat /root/autodl-tmp/t_train_tdw_co_p3_wiou_smoke.status || true'
+[local] $ ssh autodl 'tmux list-panes -t t_train_tdw_co_p3_wiou_smoke -F '"'"'#{pane_dead} #{pane_current_command}'"'"''
+[wait] t_train_tdw_co_p3_wiou_smoke: 0 bash
+[local] $ ssh autodl 'test -f /root/autodl-tmp/t_train_tdw_co_p3_wiou_smoke.done && cat /root/autodl-tmp/t_train_tdw_co_p3_wiou_smoke.status || true'
+[local] $ ssh autodl '
+set -euo pipefail
+cd /root/autodl-tmp/ultralytics
+grep -F '"'"'[ducc_wiou_train] BboxLoss.iou_type = wiou'"'"' runs/TDW-CO-P3_smoke.log
+grep -F '"'"'Results saved to'"'"' runs/TDW-CO-P3_smoke.log
+[ -f runs/detect/runs/ablation/_smoke_TDW-CO-P3/results.csv ]
+'
+Warning: Permanently added '[connect.bjb1.seetacloud.com]:44080' (ED25519) to the list of known hosts.
+[ducc_wiou_train] BboxLoss.iou_type = wiou
+Results saved to [1m/root/autodl-tmp/ultralytics/runs/detect/runs/ablation/_smoke_TDW-CO-P3[0m
+[smoke] passed: TDW-CO-P3
+
+=== Preflight TDW-CO-D3 ===
+[local] $ ssh autodl '
+set -euo pipefail
+source /etc/network_turbo
+cd /root/autodl-tmp/ultralytics
+git fetch origin
+git checkout feat/tdw-co-d3
+git pull --ff-only origin feat/tdw-co-d3
+/root/miniconda3/bin/python /root/autodl-tmp/ducc_structure_check.py --yaml ultralytics/cfg/models/11/yolo11-tdw-co-d3.yaml --kind tdw_co_d3 --changelog CHANGELOG-TDW-CO-D3.md
+'
+Warning: Permanently added '[connect.bjb1.seetacloud.com]:44080' (ED25519) to the list of known hosts.
+设置成功
+注意：仅限于学术用途和加速访问github/huggingface，不承诺稳定性保证
+Branch 'feat/tdw-co-d3' set up to track remote branch 'feat/tdw-co-d3' from 'origin'.
+Switched to a new branch 'feat/tdw-co-d3'
+From ssh://ssh.github.com:443/Asus-Github/yolo11
+ * branch              feat/tdw-co-d3 -> FETCH_HEAD
+Already up to date.
+[ducc_preflight] BboxLoss.iou_type = wiou
+WARNING ⚠️ no model scale passed. Assuming scale='n'.
+YOLO11-tdw-co-d3 summary: 280 layers, 5,280,369 parameters, 5,280,353 gradients, 11.2 GFLOPs
+[ducc_preflight] structure check passed: tdw_co_d3 ultralytics/cfg/models/11/yolo11-tdw-co-d3.yaml
+
+=== Smoke TDW-CO-D3 ===
+[local] $ ssh autodl '
+set -euo pipefail
+(tmux has-session -t t_train_tdw_co_d3_smoke 2>/dev/null && tmux kill-session -t t_train_tdw_co_d3_smoke) || true
+rm -f /root/autodl-tmp/t_train_tdw_co_d3_smoke.done /root/autodl-tmp/t_train_tdw_co_d3_smoke.status
+tmux new-session -d -s t_train_tdw_co_d3_smoke
+tmux set-option -t t_train_tdw_co_d3_smoke remain-on-exit on
+tmux set-option -g mouse on
+tmux set-window-option -g history-limit 100000
+tmux send-keys -t t_train_tdw_co_d3_smoke '"'"'rm -f /root/autodl-tmp/t_train_tdw_co_d3_smoke.done /root/autodl-tmp/t_train_tdw_co_d3_smoke.status; ( source /etc/network_turbo && cd /root/autodl-tmp/ultralytics && /root/miniconda3/bin/python /root/autodl-tmp/ducc_wiou_train.py --cfg ultralytics/cfg/models/11/yolo11-tdw-co-d3.yaml --name _smoke_TDW-CO-D3 --epochs 1 --batch 0.85 --imgsz 640 --seed 42 --project runs/ablation --patience 50 --nbs 64 --pretrained true --cos-lr --exist-ok --plots 2>&1 | tee runs/TDW-CO-D3_smoke.log ); rc=$?; echo $rc > /root/autodl-tmp/t_train_tdw_co_d3_smoke.status; touch /root/autodl-tmp/t_train_tdw_co_d3_smoke.done; exit $rc'"'"' Enter
+'
+Warning: Permanently added '[connect.bjb1.seetacloud.com]:44080' (ED25519) to the list of known hosts.
+[local] $ ssh autodl 'test -f /root/autodl-tmp/t_train_tdw_co_d3_smoke.done && cat /root/autodl-tmp/t_train_tdw_co_d3_smoke.status || true'
+[local] $ ssh autodl 'tmux list-panes -t t_train_tdw_co_d3_smoke -F '"'"'#{pane_dead} #{pane_current_command}'"'"''
+[wait] t_train_tdw_co_d3_smoke: 0 bash
+[local] $ ssh autodl 'test -f /root/autodl-tmp/t_train_tdw_co_d3_smoke.done && cat /root/autodl-tmp/t_train_tdw_co_d3_smoke.status || true'
+[local] $ ssh autodl '
+set -euo pipefail
+cd /root/autodl-tmp/ultralytics
+grep -F '"'"'[ducc_wiou_train] BboxLoss.iou_type = wiou'"'"' runs/TDW-CO-D3_smoke.log
+grep -F '"'"'Results saved to'"'"' runs/TDW-CO-D3_smoke.log
+[ -f runs/detect/runs/ablation/_smoke_TDW-CO-D3/results.csv ]
+'
+Warning: Permanently added '[connect.bjb1.seetacloud.com]:44080' (ED25519) to the list of known hosts.
+[ducc_wiou_train] BboxLoss.iou_type = wiou
+Results saved to [1m/root/autodl-tmp/ultralytics/runs/detect/runs/ablation/_smoke_TDW-CO-D3[0m
+[smoke] passed: TDW-CO-D3
+
+=== Preflight DWCA-P2 ===
+[local] $ ssh autodl '
+set -euo pipefail
+source /etc/network_turbo
+cd /root/autodl-tmp/ultralytics
+git fetch origin
+git checkout feat/dwca-p2
+git pull --ff-only origin feat/dwca-p2
+/root/miniconda3/bin/python /root/autodl-tmp/ducc_structure_check.py --yaml ultralytics/cfg/models/11/yolo11-dwca-p2.yaml --kind dwca_p2 --changelog CHANGELOG-DWCA-P2.md
+'
+Warning: Permanently added '[connect.bjb1.seetacloud.com]:44080' (ED25519) to the list of known hosts.
+设置成功
+注意：仅限于学术用途和加速访问github/huggingface，不承诺稳定性保证
+Branch 'feat/dwca-p2' set up to track remote branch 'feat/dwca-p2' from 'origin'.
+Switched to a new branch 'feat/dwca-p2'
+From ssh://ssh.github.com:443/Asus-Github/yolo11
+ * branch              feat/dwca-p2 -> FETCH_HEAD
+Already up to date.
+[ducc_preflight] BboxLoss.iou_type = wiou
+WARNING ⚠️ no model scale passed. Assuming scale='n'.
+YOLO11-dwca-p2 summary: 304 layers, 4,535,368 parameters, 4,535,352 gradients, 15.4 GFLOPs
+[ducc_preflight] structure check passed: dwca_p2 ultralytics/cfg/models/11/yolo11-dwca-p2.yaml
+
+=== Smoke DWCA-P2 ===
+[local] $ ssh autodl '
+set -euo pipefail
+(tmux has-session -t t_train_dwca_p2_smoke 2>/dev/null && tmux kill-session -t t_train_dwca_p2_smoke) || true
+rm -f /root/autodl-tmp/t_train_dwca_p2_smoke.done /root/autodl-tmp/t_train_dwca_p2_smoke.status
+tmux new-session -d -s t_train_dwca_p2_smoke
+tmux set-option -t t_train_dwca_p2_smoke remain-on-exit on
+tmux set-option -g mouse on
+tmux set-window-option -g history-limit 100000
+tmux send-keys -t t_train_dwca_p2_smoke '"'"'rm -f /root/autodl-tmp/t_train_dwca_p2_smoke.done /root/autodl-tmp/t_train_dwca_p2_smoke.status; ( source /etc/network_turbo && cd /root/autodl-tmp/ultralytics && /root/miniconda3/bin/python /root/autodl-tmp/ducc_wiou_train.py --cfg ultralytics/cfg/models/11/yolo11-dwca-p2.yaml --name _smoke_DWCA-P2 --epochs 1 --batch 0.85 --imgsz 640 --seed 42 --project runs/ablation --patience 50 --nbs 64 --pretrained true --cos-lr --exist-ok --plots 2>&1 | tee runs/DWCA-P2_smoke.log ); rc=$?; echo $rc > /root/autodl-tmp/t_train_dwca_p2_smoke.status; touch /root/autodl-tmp/t_train_dwca_p2_smoke.done; exit $rc'"'"' Enter
+'
+Warning: Permanently added '[connect.bjb1.seetacloud.com]:44080' (ED25519) to the list of known hosts.
+[local] $ ssh autodl 'test -f /root/autodl-tmp/t_train_dwca_p2_smoke.done && cat /root/autodl-tmp/t_train_dwca_p2_smoke.status || true'
+[local] $ ssh autodl 'tmux list-panes -t t_train_dwca_p2_smoke -F '"'"'#{pane_dead} #{pane_current_command}'"'"''
+[wait] t_train_dwca_p2_smoke: 0 bash
+[local] $ ssh autodl 'test -f /root/autodl-tmp/t_train_dwca_p2_smoke.done && cat /root/autodl-tmp/t_train_dwca_p2_smoke.status || true'
+[local] $ ssh autodl '
+set -euo pipefail
+cd /root/autodl-tmp/ultralytics
+grep -F '"'"'[ducc_wiou_train] BboxLoss.iou_type = wiou'"'"' runs/DWCA-P2_smoke.log
+grep -F '"'"'Results saved to'"'"' runs/DWCA-P2_smoke.log
+[ -f runs/detect/runs/ablation/_smoke_DWCA-P2/results.csv ]
+'
+Warning: Permanently added '[connect.bjb1.seetacloud.com]:44080' (ED25519) to the list of known hosts.
+[ducc_wiou_train] BboxLoss.iou_type = wiou
+Results saved to [1m/root/autodl-tmp/ultralytics/runs/detect/runs/ablation/_smoke_DWCA-P2[0m
+[smoke] passed: DWCA-P2
+
+=== Preflight TDW-CO-P3 ===
+[local] $ ssh autodl '
+set -euo pipefail
+source /etc/network_turbo
+cd /root/autodl-tmp/ultralytics
+git fetch origin
+git checkout feat/tdw-co-p3
+git pull --ff-only origin feat/tdw-co-p3
+/root/miniconda3/bin/python /root/autodl-tmp/ducc_structure_check.py --yaml ultralytics/cfg/models/11/yolo11-tdw-co-p3.yaml --kind tdw_co_p3 --changelog CHANGELOG-TDW-CO-P3.md
+'
+Warning: Permanently added '[connect.bjb1.seetacloud.com]:44080' (ED25519) to the list of known hosts.
+设置成功
+注意：仅限于学术用途和加速访问github/huggingface，不承诺稳定性保证
+Your branch is up to date with 'origin/feat/tdw-co-p3'.
+Switched to branch 'feat/tdw-co-p3'
+From ssh://ssh.github.com:443/Asus-Github/yolo11
+ * branch              feat/tdw-co-p3 -> FETCH_HEAD
+Already up to date.
+[ducc_preflight] BboxLoss.iou_type = wiou
+WARNING ⚠️ no model scale passed. Assuming scale='n'.
+YOLO11-tdw-co-p3 summary: 250 layers, 4,395,006 parameters, 4,394,990 gradients, 9.7 GFLOPs
+[ducc_preflight] structure check passed: tdw_co_p3 ultralytics/cfg/models/11/yolo11-tdw-co-p3.yaml
+
+=== Full train TDW-CO-P3 ===
+[local] $ ssh autodl '
+set -euo pipefail
+cd /root/autodl-tmp/ultralytics
+if [ -d runs/detect/runs/ablation/TDW-CO-P3 ] && [ ! -d runs/detect/runs/ablation/TDW-CO-P3-CIoU-ref ]; then
+  mv runs/detect/runs/ablation/TDW-CO-P3 runs/detect/runs/ablation/TDW-CO-P3-CIoU-ref
+fi
+if [ -f runs/TDW-CO-P3_train.log ] && [ ! -f runs/TDW-CO-P3-CIoU-ref_train.log ]; then
+  mv runs/TDW-CO-P3_train.log runs/TDW-CO-P3-CIoU-ref_train.log
+fi
+'
+Warning: Permanently added '[connect.bjb1.seetacloud.com]:44080' (ED25519) to the list of known hosts.
+[local] $ ssh autodl '
+set -euo pipefail
+(tmux has-session -t t_train_tdw_co_p3_wiou 2>/dev/null && tmux kill-session -t t_train_tdw_co_p3_wiou) || true
+rm -f /root/autodl-tmp/t_train_tdw_co_p3_wiou.done /root/autodl-tmp/t_train_tdw_co_p3_wiou.status
+tmux new-session -d -s t_train_tdw_co_p3_wiou
+tmux set-option -t t_train_tdw_co_p3_wiou remain-on-exit on
+tmux set-option -g mouse on
+tmux set-window-option -g history-limit 100000
+tmux send-keys -t t_train_tdw_co_p3_wiou '"'"'rm -f /root/autodl-tmp/t_train_tdw_co_p3_wiou.done /root/autodl-tmp/t_train_tdw_co_p3_wiou.status; ( source /etc/network_turbo && cd /root/autodl-tmp/ultralytics && /root/miniconda3/bin/python /root/autodl-tmp/ducc_wiou_train.py --cfg ultralytics/cfg/models/11/yolo11-tdw-co-p3.yaml --name TDW-CO-P3 --epochs 300 --batch 0.85 --imgsz 640 --seed 42 --project runs/ablation --patience 50 --nbs 64 --pretrained true --cos-lr --exist-ok --plots 2>&1 | tee runs/TDW-CO-P3_train.log ); rc=$?; echo $rc > /root/autodl-tmp/t_train_tdw_co_p3_wiou.status; touch /root/autodl-tmp/t_train_tdw_co_p3_wiou.done; exit $rc'"'"' Enter
+'
+Warning: Permanently added '[connect.bjb1.seetacloud.com]:44080' (ED25519) to the list of known hosts.
+[local] $ ssh autodl 'test -f /root/autodl-tmp/t_train_tdw_co_p3_wiou.done && cat /root/autodl-tmp/t_train_tdw_co_p3_wiou.status || true'
+[local] $ ssh autodl 'tmux list-panes -t t_train_tdw_co_p3_wiou -F '"'"'#{pane_dead} #{pane_current_command}'"'"''
+[wait] t_train_tdw_co_p3_wiou: 0 bash
+[local] $ ssh autodl 'test -f /root/autodl-tmp/t_train_tdw_co_p3_wiou.done && cat /root/autodl-tmp/t_train_tdw_co_p3_wiou.status || true'
+[local] $ ssh autodl 'tmux list-panes -t t_train_tdw_co_p3_wiou -F '"'"'#{pane_dead} #{pane_current_command}'"'"''
+[wait] t_train_tdw_co_p3_wiou: 0 bash
+[local] $ ssh autodl 'test -f /root/autodl-tmp/t_train_tdw_co_p3_wiou.done && cat /root/autodl-tmp/t_train_tdw_co_p3_wiou.status || true'
+[local] $ ssh autodl 'tmux list-panes -t t_train_tdw_co_p3_wiou -F '"'"'#{pane_dead} #{pane_current_command}'"'"''
+[wait] t_train_tdw_co_p3_wiou: 0 bash
+[local] $ ssh autodl 'test -f /root/autodl-tmp/t_train_tdw_co_p3_wiou.done && cat /root/autodl-tmp/t_train_tdw_co_p3_wiou.status || true'
+[local] $ ssh autodl 'tmux list-panes -t t_train_tdw_co_p3_wiou -F '"'"'#{pane_dead} #{pane_current_command}'"'"''
+[wait] t_train_tdw_co_p3_wiou: 0 bash
+[local] $ ssh autodl 'test -f /root/autodl-tmp/t_train_tdw_co_p3_wiou.done && cat /root/autodl-tmp/t_train_tdw_co_p3_wiou.status || true'
+[local] $ ssh autodl 'tmux list-panes -t t_train_tdw_co_p3_wiou -F '"'"'#{pane_dead} #{pane_current_command}'"'"''
+[wait] t_train_tdw_co_p3_wiou: 0 bash
+[local] $ ssh autodl 'test -f /root/autodl-tmp/t_train_tdw_co_p3_wiou.done && cat /root/autodl-tmp/t_train_tdw_co_p3_wiou.status || true'
+[local] $ ssh autodl 'tmux list-panes -t t_train_tdw_co_p3_wiou -F '"'"'#{pane_dead} #{pane_current_command}'"'"''
+[wait] t_train_tdw_co_p3_wiou: 0 bash
+[local] $ ssh autodl 'test -f /root/autodl-tmp/t_train_tdw_co_p3_wiou.done && cat /root/autodl-tmp/t_train_tdw_co_p3_wiou.status || true'
+[local] $ ssh autodl 'tmux list-panes -t t_train_tdw_co_p3_wiou -F '"'"'#{pane_dead} #{pane_current_command}'"'"''
+[wait] t_train_tdw_co_p3_wiou: 0 bash
+[local] $ ssh autodl 'test -f /root/autodl-tmp/t_train_tdw_co_p3_wiou.done && cat /root/autodl-tmp/t_train_tdw_co_p3_wiou.status || true'
+[local] $ ssh autodl 'tmux list-panes -t t_train_tdw_co_p3_wiou -F '"'"'#{pane_dead} #{pane_current_command}'"'"''
+[wait] t_train_tdw_co_p3_wiou: 0 bash
+[local] $ ssh autodl 'test -f /root/autodl-tmp/t_train_tdw_co_p3_wiou.done && cat /root/autodl-tmp/t_train_tdw_co_p3_wiou.status || true'
+[local] $ ssh autodl 'tmux list-panes -t t_train_tdw_co_p3_wiou -F '"'"'#{pane_dead} #{pane_current_command}'"'"''
+[wait] t_train_tdw_co_p3_wiou: 0 bash
+[local] $ ssh autodl 'test -f /root/autodl-tmp/t_train_tdw_co_p3_wiou.done && cat /root/autodl-tmp/t_train_tdw_co_p3_wiou.status || true'
+[local] $ ssh autodl 'tmux list-panes -t t_train_tdw_co_p3_wiou -F '"'"'#{pane_dead} #{pane_current_command}'"'"''
+[wait] t_train_tdw_co_p3_wiou: 0 bash
+[local] $ ssh autodl 'test -f /root/autodl-tmp/t_train_tdw_co_p3_wiou.done && cat /root/autodl-tmp/t_train_tdw_co_p3_wiou.status || true'
+[local] $ ssh autodl 'tmux list-panes -t t_train_tdw_co_p3_wiou -F '"'"'#{pane_dead} #{pane_current_command}'"'"''
+[wait] t_train_tdw_co_p3_wiou: 0 bash
+[local] $ ssh autodl 'test -f /root/autodl-tmp/t_train_tdw_co_p3_wiou.done && cat /root/autodl-tmp/t_train_tdw_co_p3_wiou.status || true'
+[local] $ ssh autodl 'tmux list-panes -t t_train_tdw_co_p3_wiou -F '"'"'#{pane_dead} #{pane_current_command}'"'"''
+[wait] t_train_tdw_co_p3_wiou: 0 bash
+[local] $ ssh autodl 'test -f /root/autodl-tmp/t_train_tdw_co_p3_wiou.done && cat /root/autodl-tmp/t_train_tdw_co_p3_wiou.status || true'
+[local] $ ssh autodl 'tmux list-panes -t t_train_tdw_co_p3_wiou -F '"'"'#{pane_dead} #{pane_current_command}'"'"''
+[wait] t_train_tdw_co_p3_wiou: 0 bash
+[local] $ ssh autodl 'test -f /root/autodl-tmp/t_train_tdw_co_p3_wiou.done && cat /root/autodl-tmp/t_train_tdw_co_p3_wiou.status || true'
+[local] $ ssh autodl 'tmux list-panes -t t_train_tdw_co_p3_wiou -F '"'"'#{pane_dead} #{pane_current_command}'"'"''
+[wait] t_train_tdw_co_p3_wiou: 0 bash
+[local] $ ssh autodl 'test -f /root/autodl-tmp/t_train_tdw_co_p3_wiou.done && cat /root/autodl-tmp/t_train_tdw_co_p3_wiou.status || true'
+[local] $ ssh autodl 'tmux list-panes -t t_train_tdw_co_p3_wiou -F '"'"'#{pane_dead} #{pane_current_command}'"'"''
+[wait] t_train_tdw_co_p3_wiou: 0 bash
+[local] $ ssh autodl 'test -f /root/autodl-tmp/t_train_tdw_co_p3_wiou.done && cat /root/autodl-tmp/t_train_tdw_co_p3_wiou.status || true'
+[local] $ ssh autodl 'tmux list-panes -t t_train_tdw_co_p3_wiou -F '"'"'#{pane_dead} #{pane_current_command}'"'"''
+[wait] t_train_tdw_co_p3_wiou: 0 bash
+[local] $ ssh autodl 'test -f /root/autodl-tmp/t_train_tdw_co_p3_wiou.done && cat /root/autodl-tmp/t_train_tdw_co_p3_wiou.status || true'
+[local] $ ssh autodl 'tmux list-panes -t t_train_tdw_co_p3_wiou -F '"'"'#{pane_dead} #{pane_current_command}'"'"''
+[wait] t_train_tdw_co_p3_wiou: 0 bash
+[local] $ ssh autodl 'test -f /root/autodl-tmp/t_train_tdw_co_p3_wiou.done && cat /root/autodl-tmp/t_train_tdw_co_p3_wiou.status || true'
+[local] $ ssh autodl 'tmux list-panes -t t_train_tdw_co_p3_wiou -F '"'"'#{pane_dead} #{pane_current_command}'"'"''
+[wait] t_train_tdw_co_p3_wiou: 0 bash
+[local] $ ssh autodl 'test -f /root/autodl-tmp/t_train_tdw_co_p3_wiou.done && cat /root/autodl-tmp/t_train_tdw_co_p3_wiou.status || true'
+[local] $ ssh autodl 'tmux list-panes -t t_train_tdw_co_p3_wiou -F '"'"'#{pane_dead} #{pane_current_command}'"'"''
+[wait] t_train_tdw_co_p3_wiou: 0 bash
+[local] $ ssh autodl 'test -f /root/autodl-tmp/t_train_tdw_co_p3_wiou.done && cat /root/autodl-tmp/t_train_tdw_co_p3_wiou.status || true'
+[local] $ ssh autodl 'tmux list-panes -t t_train_tdw_co_p3_wiou -F '"'"'#{pane_dead} #{pane_current_command}'"'"''
+[wait] t_train_tdw_co_p3_wiou: 0 bash
+[local] $ ssh autodl 'test -f /root/autodl-tmp/t_train_tdw_co_p3_wiou.done && cat /root/autodl-tmp/t_train_tdw_co_p3_wiou.status || true'
+[local] $ ssh autodl '
+set -euo pipefail
+cd /root/autodl-tmp/ultralytics
+grep -F '"'"'[ducc_wiou_train] BboxLoss.iou_type = wiou'"'"' runs/TDW-CO-P3_train.log
+[ -f runs/detect/runs/ablation/TDW-CO-P3/results.csv ]
+[ -f runs/detect/runs/ablation/TDW-CO-P3/weights/best.pt ]
+'
+Warning: Permanently added '[connect.bjb1.seetacloud.com]:44080' (ED25519) to the list of known hosts.
+[ducc_wiou_train] BboxLoss.iou_type = wiou
+[local] $ ssh autodl 'cd /root/autodl-tmp/ultralytics && /root/miniconda3/bin/python /root/autodl-tmp/ducc_collect_result.py --exp TDW-CO-P3'
+[summary] {'name': 'TDW-CO-P3', 'epochs_recorded': 300, 'best_epoch': 264, 'precision': 0.86543, 'recall': 0.81429, 'map50': 0.86732, 'map50_95': 0.61058, 'run_dir': 'runs/detect/runs/ablation/TDW-CO-P3', 'log_path': 'runs/TDW-CO-P3_train.log', 'params_m': 4.35, 'gflops': 9.4, 'wiou_logged': True}
+[local] $ scp -r autodl:/root/autodl-tmp/ultralytics/runs/detect/runs/ablation/TDW-CO-P3 /Users/asus/ultralytics/runs/detect/runs/ablation/TDW-CO-P3
+Warning: Permanently added '[connect.bjb1.seetacloud.com]:44080' (ED25519) to the list of known hosts.
+[local] $ scp -r autodl:/root/autodl-tmp/ultralytics/runs/TDW-CO-P3_train.log /Users/asus/ultralytics/runs/TDW-CO-P3_train.log
+Warning: Permanently added '[connect.bjb1.seetacloud.com]:44080' (ED25519) to the list of known hosts.
+[excel] updated row 21 for TDW-CO-P3
+[local] $ ssh autodl '
+set -euo pipefail
+source /etc/network_turbo
+cd /root/autodl-tmp/ultralytics
+git checkout feat/tdw-co-p3
+git add -f runs/TDW-CO-P3_train.log runs/detect/runs/ablation/TDW-CO-P3
+git reset -q -- runs/detect/runs/ablation/TDW-CO-P3/weights || true
+git status --short
+if git diff --cached --quiet; then
+  echo '"'"'[git] no non-weight artifacts to commit'"'"'
+else
+  git commit -m '"'"'feat(results): add TDW-CO-P3 WIoU training results'"'"'
+  git push origin feat/tdw-co-p3
+fi
+'
+Warning: Permanently added '[connect.bjb1.seetacloud.com]:44080' (ED25519) to the list of known hosts.
+设置成功
+注意：仅限于学术用途和加速访问github/huggingface，不承诺稳定性保证
+Your branch is up to date with 'origin/feat/tdw-co-p3'.
+Already on 'feat/tdw-co-p3'
+A  runs/TDW-CO-P3_train.log
+A  runs/detect/runs/ablation/TDW-CO-P3/BoxF1_curve.png
+A  runs/detect/runs/ablation/TDW-CO-P3/BoxPR_curve.png
+A  runs/detect/runs/ablation/TDW-CO-P3/BoxP_curve.png
+A  runs/detect/runs/ablation/TDW-CO-P3/BoxR_curve.png
+A  runs/detect/runs/ablation/TDW-CO-P3/args.yaml
+A  runs/detect/runs/ablation/TDW-CO-P3/confusion_matrix.png
+A  runs/detect/runs/ablation/TDW-CO-P3/confusion_matrix_normalized.png
+A  runs/detect/runs/ablation/TDW-CO-P3/labels.jpg
+A  runs/detect/runs/ablation/TDW-CO-P3/results.csv
+A  runs/detect/runs/ablation/TDW-CO-P3/results.png
+A  runs/detect/runs/ablation/TDW-CO-P3/train_batch0.jpg
+A  runs/detect/runs/ablation/TDW-CO-P3/train_batch1.jpg
+A  runs/detect/runs/ablation/TDW-CO-P3/train_batch2.jpg
+A  runs/detect/runs/ablation/TDW-CO-P3/train_batch31900.jpg
+A  runs/detect/runs/ablation/TDW-CO-P3/train_batch31901.jpg
+A  runs/detect/runs/ablation/TDW-CO-P3/train_batch31902.jpg
+A  runs/detect/runs/ablation/TDW-CO-P3/val_batch0_labels.jpg
+A  runs/detect/runs/ablation/TDW-CO-P3/val_batch0_pred.jpg
+A  runs/detect/runs/ablation/TDW-CO-P3/val_batch1_labels.jpg
+A  runs/detect/runs/ablation/TDW-CO-P3/val_batch1_pred.jpg
+A  runs/detect/runs/ablation/TDW-CO-P3/val_batch2_labels.jpg
+A  runs/detect/runs/ablation/TDW-CO-P3/val_batch2_pred.jpg
+?? runs/+TD_train.log
+?? runs/+T_train.log
+?? runs/DWCA-P2_smoke.log
+?? runs/TDW-CO-D3_smoke.log
+?? runs/TDW-CO-P3-CIoU-ref_train.log
+?? runs/TDW-CO-P3_smoke.log
+?? runs/TDW-CO_train.log
+?? runs/TDW_train.log
+?? runs/detect/runs/ablation/+T/
+?? runs/detect/runs/ablation/+TD/
+?? runs/detect/runs/ablation/TDW-CO-P3-CIoU-ref/
+?? runs/detect/runs/ablation/TDW-CO/
+?? runs/detect/runs/ablation/TDW/
+?? runs/detect/runs/ablation/_smoke_DWCA-P2/
+?? runs/detect/runs/ablation/_smoke_TDW-CO-D3/
+?? runs/detect/runs/ablation/_smoke_TDW-CO-P3/
+?? runs/detect/val-4/
+[feat/tdw-co-p3 94098281] feat(results): add TDW-CO-P3 WIoU training results
+ 23 files changed, 1995 insertions(+)
+ create mode 100644 runs/TDW-CO-P3_train.log
+ create mode 100644 runs/detect/runs/ablation/TDW-CO-P3/BoxF1_curve.png
+ create mode 100644 runs/detect/runs/ablation/TDW-CO-P3/BoxPR_curve.png
+ create mode 100644 runs/detect/runs/ablation/TDW-CO-P3/BoxP_curve.png
+ create mode 100644 runs/detect/runs/ablation/TDW-CO-P3/BoxR_curve.png
+ create mode 100644 runs/detect/runs/ablation/TDW-CO-P3/args.yaml
+ create mode 100644 runs/detect/runs/ablation/TDW-CO-P3/confusion_matrix.png
+ create mode 100644 runs/detect/runs/ablation/TDW-CO-P3/confusion_matrix_normalized.png
+ create mode 100644 runs/detect/runs/ablation/TDW-CO-P3/labels.jpg
+ create mode 100644 runs/detect/runs/ablation/TDW-CO-P3/results.csv
+ create mode 100644 runs/detect/runs/ablation/TDW-CO-P3/results.png
+ create mode 100644 runs/detect/runs/ablation/TDW-CO-P3/train_batch0.jpg
+ create mode 100644 runs/detect/runs/ablation/TDW-CO-P3/train_batch1.jpg
+ create mode 100644 runs/detect/runs/ablation/TDW-CO-P3/train_batch2.jpg
+ create mode 100644 runs/detect/runs/ablation/TDW-CO-P3/train_batch31900.jpg
+ create mode 100644 runs/detect/runs/ablation/TDW-CO-P3/train_batch31901.jpg
+ create mode 100644 runs/detect/runs/ablation/TDW-CO-P3/train_batch31902.jpg
+ create mode 100644 runs/detect/runs/ablation/TDW-CO-P3/val_batch0_labels.jpg
+ create mode 100644 runs/detect/runs/ablation/TDW-CO-P3/val_batch0_pred.jpg
+ create mode 100644 runs/detect/runs/ablation/TDW-CO-P3/val_batch1_labels.jpg
+ create mode 100644 runs/detect/runs/ablation/TDW-CO-P3/val_batch1_pred.jpg
+ create mode 100644 runs/detect/runs/ablation/TDW-CO-P3/val_batch2_labels.jpg
+ create mode 100644 runs/detect/runs/ablation/TDW-CO-P3/val_batch2_pred.jpg
+Connection to connect.bjb1.seetacloud.com closed by remote host.
+client_loop: send disconnect: Broken pipe
+Traceback (most recent call last):
+  File "/Users/asus/ultralytics/scripts/autodl_experiment_queue.py", line 590, in <module>
+    sys.exit(main())
+  File "/Users/asus/ultralytics/scripts/autodl_experiment_queue.py", line 585, in main
+    run_queue(smoke_only=args.smoke_only, start_full_after_smoke=not args.no_full)
+  File "/Users/asus/ultralytics/scripts/autodl_experiment_queue.py", line 575, in run_queue
+    commit_push_artifacts(exp)
+  File "/Users/asus/ultralytics/scripts/autodl_experiment_queue.py", line 553, in commit_push_artifacts
+    ssh(cmd, timeout=600)
+  File "/Users/asus/ultralytics/scripts/autodl_experiment_queue.py", line 334, in ssh
+    return run(["ssh", REMOTE, command], check=check, capture=capture, timeout=timeout)
+  File "/Users/asus/ultralytics/scripts/autodl_experiment_queue.py", line 330, in run
+    return subprocess.run(cmd, shell=shell, text=True, check=check, capture_output=capture, timeout=timeout)
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/subprocess.py", line 528, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['ssh', 'autodl', "\nset -euo pipefail\nsource /etc/network_turbo\ncd /root/autodl-tmp/ultralytics\ngit checkout feat/tdw-co-p3\ngit add -f runs/TDW-CO-P3_train.log runs/detect/runs/ablation/TDW-CO-P3\ngit reset -q -- runs/detect/runs/ablation/TDW-CO-P3/weights || true\ngit status --short\nif git diff --cached --quiet; then\n  echo '[git] no non-weight artifacts to commit'\nelse\n  git commit -m 'feat(results): add TDW-CO-P3 WIoU training results'\n  git push origin feat/tdw-co-p3\nfi\n"]' returned non-zero exit status 255.

@@ -1,0 +1,189 @@
+[monitor] watching TDW-CO-D3; will start DWCA-P2 after completion
+[local] $ ssh autodl 'echo ok'
+[local] $ ssh autodl 'cd /root/autodl-tmp/ultralytics && /root/miniconda3/bin/python - <<'"'"'PY'"'"'
+from pathlib import Path
+p=Path('"'"'runs/detect/runs/ablation/TDW-CO-D3/results.csv'"'"')
+if p.exists():
+    lines=p.read_text().strip().splitlines()
+    print('"'"'results_rows'"'"', max(0, len(lines)-1))
+log=Path('"'"'runs/TDW-CO-D3_train.log'"'"')
+if log.exists():
+    txt=log.read_text(errors='"'"'ignore'"'"')
+    import re
+    epochs=re.findall(r'"'"'\n\s*(\d+)/300\s+'"'"', txt)
+    if epochs: print('"'"'last_epoch_seen'"'"', epochs[-1])
+    for line in txt.splitlines()[-20:]:
+        if '"'"'all       1411'"'"' in line or '"'"'epochs completed'"'"' in line or '"'"'EarlyStopping'"'"' in line:
+            print(line)
+PY'
+Warning: Permanently added '[connect.bjb1.seetacloud.com]:44080' (ED25519) to the list of known hosts.
+results_rows 251
+[local] $ ssh autodl 'cd /root/autodl-tmp/ultralytics && test -f runs/detect/runs/ablation/TDW-CO-D3/results.csv && test -f runs/detect/runs/ablation/TDW-CO-D3/weights/best.pt && grep -Eq '"'"'epochs completed|EarlyStopping'"'"' runs/TDW-CO-D3_train.log'
+Warning: Permanently added '[connect.bjb1.seetacloud.com]:44080' (ED25519) to the list of known hosts.
+[local] $ ssh autodl 'echo ok'
+[local] $ ssh autodl 'cd /root/autodl-tmp/ultralytics && /root/miniconda3/bin/python - <<'"'"'PY'"'"'
+from pathlib import Path
+p=Path('"'"'runs/detect/runs/ablation/TDW-CO-D3/results.csv'"'"')
+if p.exists():
+    lines=p.read_text().strip().splitlines()
+    print('"'"'results_rows'"'"', max(0, len(lines)-1))
+log=Path('"'"'runs/TDW-CO-D3_train.log'"'"')
+if log.exists():
+    txt=log.read_text(errors='"'"'ignore'"'"')
+    import re
+    epochs=re.findall(r'"'"'\n\s*(\d+)/300\s+'"'"', txt)
+    if epochs: print('"'"'last_epoch_seen'"'"', epochs[-1])
+    for line in txt.splitlines()[-20:]:
+        if '"'"'all       1411'"'"' in line or '"'"'epochs completed'"'"' in line or '"'"'EarlyStopping'"'"' in line:
+            print(line)
+PY'
+Warning: Permanently added '[connect.bjb1.seetacloud.com]:44080' (ED25519) to the list of known hosts.
+results_rows 265
+                   all       1411      65255       0.86      0.815      0.863       0.61
+[local] $ ssh autodl 'cd /root/autodl-tmp/ultralytics && test -f runs/detect/runs/ablation/TDW-CO-D3/results.csv && test -f runs/detect/runs/ablation/TDW-CO-D3/weights/best.pt && grep -Eq '"'"'epochs completed|EarlyStopping'"'"' runs/TDW-CO-D3_train.log'
+Warning: Permanently added '[connect.bjb1.seetacloud.com]:44080' (ED25519) to the list of known hosts.
+[local] $ ssh autodl 'echo ok'
+[local] $ ssh autodl 'cd /root/autodl-tmp/ultralytics && /root/miniconda3/bin/python - <<'"'"'PY'"'"'
+from pathlib import Path
+p=Path('"'"'runs/detect/runs/ablation/TDW-CO-D3/results.csv'"'"')
+if p.exists():
+    lines=p.read_text().strip().splitlines()
+    print('"'"'results_rows'"'"', max(0, len(lines)-1))
+log=Path('"'"'runs/TDW-CO-D3_train.log'"'"')
+if log.exists():
+    txt=log.read_text(errors='"'"'ignore'"'"')
+    import re
+    epochs=re.findall(r'"'"'\n\s*(\d+)/300\s+'"'"', txt)
+    if epochs: print('"'"'last_epoch_seen'"'"', epochs[-1])
+    for line in txt.splitlines()[-20:]:
+        if '"'"'all       1411'"'"' in line or '"'"'epochs completed'"'"' in line or '"'"'EarlyStopping'"'"' in line:
+            print(line)
+PY'
+Warning: Permanently added '[connect.bjb1.seetacloud.com]:44080' (ED25519) to the list of known hosts.
+results_rows 278
+[local] $ ssh autodl 'cd /root/autodl-tmp/ultralytics && test -f runs/detect/runs/ablation/TDW-CO-D3/results.csv && test -f runs/detect/runs/ablation/TDW-CO-D3/weights/best.pt && grep -Eq '"'"'epochs completed|EarlyStopping'"'"' runs/TDW-CO-D3_train.log'
+Warning: Permanently added '[connect.bjb1.seetacloud.com]:44080' (ED25519) to the list of known hosts.
+[local] $ ssh autodl 'echo ok'
+[local] $ ssh autodl 'cd /root/autodl-tmp/ultralytics && /root/miniconda3/bin/python - <<'"'"'PY'"'"'
+from pathlib import Path
+p=Path('"'"'runs/detect/runs/ablation/TDW-CO-D3/results.csv'"'"')
+if p.exists():
+    lines=p.read_text().strip().splitlines()
+    print('"'"'results_rows'"'"', max(0, len(lines)-1))
+log=Path('"'"'runs/TDW-CO-D3_train.log'"'"')
+if log.exists():
+    txt=log.read_text(errors='"'"'ignore'"'"')
+    import re
+    epochs=re.findall(r'"'"'\n\s*(\d+)/300\s+'"'"', txt)
+    if epochs: print('"'"'last_epoch_seen'"'"', epochs[-1])
+    for line in txt.splitlines()[-20:]:
+        if '"'"'all       1411'"'"' in line or '"'"'epochs completed'"'"' in line or '"'"'EarlyStopping'"'"' in line:
+            print(line)
+PY'
+Warning: Permanently added '[connect.bjb1.seetacloud.com]:44080' (ED25519) to the list of known hosts.
+results_rows 291
+                   all       1411      65255       0.86      0.813      0.863      0.611
+[local] $ ssh autodl 'cd /root/autodl-tmp/ultralytics && test -f runs/detect/runs/ablation/TDW-CO-D3/results.csv && test -f runs/detect/runs/ablation/TDW-CO-D3/weights/best.pt && grep -Eq '"'"'epochs completed|EarlyStopping'"'"' runs/TDW-CO-D3_train.log'
+Warning: Permanently added '[connect.bjb1.seetacloud.com]:44080' (ED25519) to the list of known hosts.
+[monitor] TDW-CO-D3 appears complete
+[local] $ ssh autodl 'cd /root/autodl-tmp/ultralytics && /root/miniconda3/bin/python - <<'"'"'PY'"'"'
+import csv, json, re
+from pathlib import Path
+exp='"'"'TDW-CO-D3'"'"'
+p=Path('"'"'runs/detect/runs/ablation'"'"')/exp/'"'"'results.csv'"'"'
+rows=list(csv.DictReader(p.open()))
+def get(r,n):
+    for k,v in r.items():
+        if k.strip()==n: return v
+best=max(rows, key=lambda r: float(get(r,'"'"'metrics/mAP50-95(B)'"'"') or 0))
+log=Path('"'"'runs'"'"')/f'"'"'TDW-CO-D3_train.log'"'"'
+txt=log.read_text(errors='"'"'replace'"'"')
+last='"'"''"'"'
+for line in txt.splitlines():
+    if '"'"'summary (fused)'"'"' in line or '"'"'summary:'"'"' in line:
+        last=line
+params_m=None; gflops=None
+m=re.search(r'"'"'([0-9,]+) parameters.*?([0-9.]+) GFLOPs'"'"', last)
+if m:
+    params_m=round(int(m.group(1).replace('"'"','"'"', '"'"''"'"'))/1_000_000, 2)
+    gflops=round(float(m.group(2)), 2)
+out=dict(name=exp, epochs_recorded=len(rows), best_epoch=int(float(get(best,'"'"'epoch'"'"'))), precision=float(get(best,'"'"'metrics/precision(B)'"'"')), recall=float(get(best,'"'"'metrics/recall(B)'"'"')), map50=float(get(best,'"'"'metrics/mAP50(B)'"'"')), map50_95=float(get(best,'"'"'metrics/mAP50-95(B)'"'"')), params_m=params_m, gflops=gflops, wiou_logged='"'"'[ducc_wiou_train] BboxLoss.iou_type = wiou'"'"' in txt)
+print(json.dumps(out, ensure_ascii=False))
+PY'
+[monitor] D3 summary: {'name': 'TDW-CO-D3', 'epochs_recorded': 291, 'best_epoch': 241, 'precision': 0.86108, 'recall': 0.81316, 'map50': 0.8628, 'map50_95': 0.61101, 'params_m': 5.24, 'gflops': 10.9, 'wiou_logged': True}
+[local] $ scp -r autodl:/root/autodl-tmp/ultralytics/runs/detect/runs/ablation/TDW-CO-D3 /Users/asus/ultralytics/runs/detect/runs/ablation/TDW-CO-D3
+Warning: Permanently added '[connect.bjb1.seetacloud.com]:44080' (ED25519) to the list of known hosts.
+[local] $ scp -r autodl:/root/autodl-tmp/ultralytics/runs/TDW-CO-D3_train.log /Users/asus/ultralytics/runs/TDW-CO-D3_train.log
+Warning: Permanently added '[connect.bjb1.seetacloud.com]:44080' (ED25519) to the list of known hosts.
+[excel] updated TDW-CO-D3 row 22: {'name': 'TDW-CO-D3', 'epochs_recorded': 291, 'best_epoch': 241, 'precision': 0.86108, 'recall': 0.81316, 'map50': 0.8628, 'map50_95': 0.61101, 'params_m': 5.24, 'gflops': 10.9, 'wiou_logged': True}
+[local] $ ssh autodl '
+set -euo pipefail
+source /etc/network_turbo
+cd /root/autodl-tmp/ultralytics
+git checkout feat/tdw-co-d3
+git add -f runs/TDW-CO-D3_train.log runs/detect/runs/ablation/TDW-CO-D3
+git reset -q -- runs/detect/runs/ablation/TDW-CO-D3/weights || true
+if git diff --cached --quiet; then
+  echo '"'"'[git] no non-weight D3 artifacts to commit'"'"'
+else
+  git commit -m '"'"'feat(results): add TDW-CO-D3 WIoU training results'"'"' || true
+  git push origin feat/tdw-co-d3 || true
+fi
+'
+Warning: Permanently added '[connect.bjb1.seetacloud.com]:44080' (ED25519) to the list of known hosts.
+设置成功
+注意：仅限于学术用途和加速访问github/huggingface，不承诺稳定性保证
+Your branch is up to date with 'origin/feat/tdw-co-d3'.
+Already on 'feat/tdw-co-d3'
+[feat/tdw-co-d3 9ba5b4fa] feat(results): add TDW-CO-D3 WIoU training results
+ 23 files changed, 1943 insertions(+)
+ create mode 100644 runs/TDW-CO-D3_train.log
+ create mode 100644 runs/detect/runs/ablation/TDW-CO-D3/BoxF1_curve.png
+ create mode 100644 runs/detect/runs/ablation/TDW-CO-D3/BoxPR_curve.png
+ create mode 100644 runs/detect/runs/ablation/TDW-CO-D3/BoxP_curve.png
+ create mode 100644 runs/detect/runs/ablation/TDW-CO-D3/BoxR_curve.png
+ create mode 100644 runs/detect/runs/ablation/TDW-CO-D3/args.yaml
+ create mode 100644 runs/detect/runs/ablation/TDW-CO-D3/confusion_matrix.png
+ create mode 100644 runs/detect/runs/ablation/TDW-CO-D3/confusion_matrix_normalized.png
+ create mode 100644 runs/detect/runs/ablation/TDW-CO-D3/labels.jpg
+ create mode 100644 runs/detect/runs/ablation/TDW-CO-D3/results.csv
+ create mode 100644 runs/detect/runs/ablation/TDW-CO-D3/results.png
+ create mode 100644 runs/detect/runs/ablation/TDW-CO-D3/train_batch0.jpg
+ create mode 100644 runs/detect/runs/ablation/TDW-CO-D3/train_batch1.jpg
+ create mode 100644 runs/detect/runs/ablation/TDW-CO-D3/train_batch2.jpg
+ create mode 100644 runs/detect/runs/ablation/TDW-CO-D3/train_batch34220.jpg
+ create mode 100644 runs/detect/runs/ablation/TDW-CO-D3/train_batch34221.jpg
+ create mode 100644 runs/detect/runs/ablation/TDW-CO-D3/train_batch34222.jpg
+ create mode 100644 runs/detect/runs/ablation/TDW-CO-D3/val_batch0_labels.jpg
+ create mode 100644 runs/detect/runs/ablation/TDW-CO-D3/val_batch0_pred.jpg
+ create mode 100644 runs/detect/runs/ablation/TDW-CO-D3/val_batch1_labels.jpg
+ create mode 100644 runs/detect/runs/ablation/TDW-CO-D3/val_batch1_pred.jpg
+ create mode 100644 runs/detect/runs/ablation/TDW-CO-D3/val_batch2_labels.jpg
+ create mode 100644 runs/detect/runs/ablation/TDW-CO-D3/val_batch2_pred.jpg
+To ssh://ssh.github.com:443/Asus-Github/yolo11.git
+   a5a288c0..9ba5b4fa  feat/tdw-co-d3 -> feat/tdw-co-d3
+[local] $ ssh autodl '
+set -euo pipefail
+source /etc/network_turbo
+cd /root/autodl-tmp/ultralytics
+git fetch origin
+git checkout feat/dwca-p2
+git pull --ff-only origin feat/dwca-p2
+(tmux has-session -t t_train_dwca_p2 2>/dev/null && tmux kill-session -t t_train_dwca_p2) || true
+tmux new-session -d -s t_train_dwca_p2
+tmux set-option -t t_train_dwca_p2 remain-on-exit on
+tmux set-option -g mouse on
+tmux set-window-option -g history-limit 100000
+tmux send-keys -t t_train_dwca_p2 "source /etc/network_turbo && cd /root/autodl-tmp/ultralytics && /root/miniconda3/bin/python /root/autodl-tmp/ducc_wiou_train.py --cfg ultralytics/cfg/models/11/yolo11-dwca-p2.yaml --name DWCA-P2 --epochs 300 --batch 0.85 --imgsz 640 --seed 42 --patience 50 2>&1 | tee runs/DWCA-P2_train.log" Enter
+echo started_t_train_dwca_p2
+'
+Warning: Permanently added '[connect.bjb1.seetacloud.com]:44080' (ED25519) to the list of known hosts.
+设置成功
+注意：仅限于学术用途和加速访问github/huggingface，不承诺稳定性保证
+Your branch is up to date with 'origin/feat/dwca-p2'.
+Switched to branch 'feat/dwca-p2'
+From ssh://ssh.github.com:443/Asus-Github/yolo11
+ * branch              feat/dwca-p2 -> FETCH_HEAD
+Already up to date.
+started_t_train_dwca_p2
+[monitor] DWCA-P2 started
