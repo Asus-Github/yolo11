@@ -2,11 +2,14 @@
 
 Run with: python train_baseline_full.py
 """
+
 from pathlib import Path
+
 import yaml
+
 from ultralytics import YOLO
 
-ROOT = Path(".").resolve()
+ROOT = Path.cwd()
 src = ROOT / "datasets/dair_v2x_i/dair_v2x_i.yaml"
 cfg = yaml.safe_load(src.read_text())
 cfg["path"] = str(ROOT / "datasets/dair_v2x_i")

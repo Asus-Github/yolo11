@@ -9,6 +9,7 @@ Output layout (under <out_root>):
     labels/{train,val,test}/{frame_id}.txt
     dair_v2x_i.yaml
 """
+
 from __future__ import annotations
 
 import argparse
@@ -83,8 +84,12 @@ def main() -> None:
     ap.add_argument("--out", default="/Users/asus/ultralytics/datasets/dair_v2x_i")
     ap.add_argument("--ratios", default="0.7,0.2,0.1", help="train,val,test")
     ap.add_argument("--seed", type=int, default=42)
-    ap.add_argument("--mode", choices=["copy", "symlink", "move"], default="symlink",
-                    help="how to place images into images/{split}/")
+    ap.add_argument(
+        "--mode",
+        choices=["copy", "symlink", "move"],
+        default="symlink",
+        help="how to place images into images/{split}/",
+    )
     args = ap.parse_args()
 
     src_img = Path(args.src_images)
@@ -157,8 +162,7 @@ def main() -> None:
         f"train: images/train\n"
         f"val: images/val\n"
         f"test: images/test\n\n"
-        f"names:\n"
-        + "".join(f"  {i}: {c}\n" for i, c in enumerate(CLASSES))
+        f"names:\n" + "".join(f"  {i}: {c}\n" for i, c in enumerate(CLASSES))
     )
     yaml_path.write_text(yaml_text)
 
